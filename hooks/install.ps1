@@ -18,23 +18,21 @@ if (-not $settings.ContainsKey("hooks")) {
 $hooks = $settings["hooks"]
 $pyCmd = "python `"$captureScript`""
 
-$hooks["PreToolUse"] = @(
-    @{
-        matcher = ""
-        hooks = @(@{ type = "command"; command = "$pyCmd pre" })
-    }
-)
+# Append to existing hook arrays rather than replace, preserving user's other hooks
+if (-not $hooks.ContainsKey("PreToolUse")) { $hooks["PreToolUse"] = @() }
+$hooks["PreToolUse"] += @{
+    matcher = ""
+    hooks   = @(@{ type = "command"; command = "$pyCmd pre" })
+}
 
-$hooks["PostToolUse"] = @(
-    @{
-        matcher = ""
-        hooks = @(@{ type = "command"; command = "$pyCmd post" })
-    }
-)
+if (-not $hooks.ContainsKey("PostToolUse")) { $hooks["PostToolUse"] = @() }
+$hooks["PostToolUse"] += @{
+    matcher = ""
+    hooks   = @(@{ type = "command"; command = "$pyCmd post" })
+}
 
-$hooks["Stop"] = @(
-    @{ type = "command"; command = "$pyCmd stop" }
-)
+if (-not $hooks.ContainsKey("Stop")) { $hooks["Stop"] = @() }
+$hooks["Stop"] += @{ type = "command"; command = "$pyCmd stop" }
 
 $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsPath -Encoding UTF8
 
