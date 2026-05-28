@@ -57,17 +57,24 @@ function handleEvent(event) {
 const taskCards = new Map(); // task_id → card element
 
 function updateTaskBoard(event) {
-    hideEmptyState('task-empty');
-
     const { task_id, title, status } = event;
 
+    if (status === 'deleted') {
+        if (taskCards.has(task_id)) {
+            taskCards.get(task_id).remove();
+            taskCards.delete(task_id);
+            updateSectionVisibility();
+        }
+        return;
+    }
+
+    hideEmptyState('task-empty');
+
     if (taskCards.has(task_id)) {
-        // Update existing card
         const card = taskCards.get(task_id);
         moveTaskCard(card, status);
         card.querySelector('.task-meta').textContent = status;
     } else {
-        // Create new card
         const card = createTaskCard(task_id, title, status);
         taskCards.set(task_id, card);
         getTaskSection(status).appendChild(card);
