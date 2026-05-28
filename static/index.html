@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Overwatch</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <span class="logo">⬡ Claude Overwatch</span>
+    <span class="live-indicator">
+      <span class="pulse-dot" id="pulse-dot"></span>
+      <span id="live-label">OFFLINE</span>
+    </span>
+    <span class="stats" id="stats">Waiting...</span>
+  </header>
+
+  <main class="main-grid">
+
+    <!-- LEFT: Task Board -->
+    <section class="panel" id="task-board-panel">
+      <div class="panel-header">Task Board</div>
+      <div class="panel-body" id="task-board">
+        <div class="empty-state" id="task-empty">No tasks yet</div>
+        <div class="task-section" id="section-in_progress">
+          <div class="task-section-label status-in_progress">
+            <span class="dot"></span> In Progress
+          </div>
+          <div class="task-list" id="tasks-in_progress"></div>
+        </div>
+        <div class="task-section" id="section-pending">
+          <div class="task-section-label status-pending">
+            <span class="dot"></span> Queued
+          </div>
+          <div class="task-list" id="tasks-pending"></div>
+        </div>
+        <div class="task-section" id="section-completed">
+          <div class="task-section-label status-completed">
+            <span class="dot"></span> Done
+          </div>
+          <div class="task-list" id="tasks-completed"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: Live Feed -->
+    <section class="panel" id="live-feed-panel">
+      <div class="panel-header">Live Feed</div>
+      <div class="panel-body" id="live-feed">
+        <div class="empty-state" id="feed-empty">Connecting to Claude Overwatch...</div>
+      </div>
+    </section>
+
+  </main>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>
