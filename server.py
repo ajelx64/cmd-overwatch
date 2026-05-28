@@ -2,7 +2,7 @@ from collections import deque
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
-from models import ToolEvent, TaskEvent
+from models import ToolEvent, TaskEvent, SessionEvent
 
 app = FastAPI()
 
@@ -31,7 +31,9 @@ async def startup():
 async def ingest_event(payload: dict):
     tool_name = payload.get("tool_name", "")
 
-    if tool_name in ("TaskCreate", "TaskUpdate"):
+    if payload.get("phase") == "stop":
+        event = SessionEvent(session_type="stop")
+    elif tool_name in ("TaskCreate", "TaskUpdate"):
         tool_input = payload.get("tool_input", {})
         event = TaskEvent(
             task_id=tool_input.get("task_id", "unknown"),
@@ -39,7 +41,7 @@ async def ingest_event(payload: dict):
             status=tool_input.get("status", "pending"),
         )
     else:
-        tool_input = payload.get("tool_input", {})
+        tool_input = payload.get("tool_input", {}) or {}
         # Build input_summary from first key:value pair, truncated to 100 chars
         if tool_input:
             first_key = next(iter(tool_input))
