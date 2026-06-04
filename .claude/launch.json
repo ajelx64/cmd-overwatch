@@ -4,7 +4,7 @@
     {
       "name": "claude-overwatch",
       "runtimeExecutable": "uvicorn",
-      "runtimeArgs": ["server:app", "--host", "0.0.0.0", "--port", "8765"],
+      "runtimeArgs": ["server:app", "--host", "127.0.0.1", "--port", "8765"],
       "port": 8765
     }
   ]
