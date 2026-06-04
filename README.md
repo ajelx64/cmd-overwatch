@@ -53,3 +53,12 @@ You should see a row appear in the live feed instantly.
 Claude Code fires shell hooks before and after each tool call. The hook script (`hooks/capture.py`) reads the event JSON from stdin and POSTs it to the local FastAPI server. The server buffers the last 500 events and broadcasts to all connected browsers via WebSocket. The browser dashboard auto-reconnects if the server restarts.
 
 The hook is non-blocking — if the server isn't running, it silently exits without interrupting Claude.
+
+## Security
+
+The server binds to **127.0.0.1** (loopback) only, so the dashboard is reachable just from this
+machine. This matters because `/event` and `/ws` are **unauthenticated by design** for local use:
+anyone who can reach the port can POST forged events *and* read the buffered stream of your Claude
+Code activity (file paths, tool-call arguments). **Do not change the bind to `0.0.0.0` or expose the
+port to a network without first adding authentication** (e.g. a shared bearer token the hook also
+sends, and/or a reverse proxy). The capture hook only ever talks to `http://localhost:8765`.
