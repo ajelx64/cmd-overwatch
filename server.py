@@ -1,17 +1,42 @@
-from collections import deque
+import contextlib
+from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
 from models import SessionEvent, TaskEvent, ToolEvent
+from overwatch.config import Config, load_config
+from overwatch.store import Store
 
-app = FastAPI()
-
-event_buffer: deque = deque(maxlen=500)
+config: Config = load_config()
+store: Store | None = None
 active_connections: list[WebSocket] = []
 
+REPLAY_LIMIT = 500
 
-async def broadcast(event_dict: dict):
+
+def get_store() -> Store:
+    """Lazily open the shared store (lets tests point OVERWATCH_CONFIG at a tmp dir)."""
+    global store
+    if store is None:
+        store = Store(config.db_path)
+    return store
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    get_store()
+    print(f"cmd-overwatch running at http://{config.host}:{config.port}")
+    yield
+    if store is not None:
+        store.close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+async def broadcast(event_dict: dict[str, Any]) -> None:
     failed = []
     for ws in list(active_connections):
         try:
@@ -23,14 +48,10 @@ async def broadcast(event_dict: dict):
             active_connections.remove(ws)
 
 
-@app.on_event("startup")
-async def startup():
-    print("Claude Overwatch running at http://localhost:8765")
-
-
 @app.post("/event")
-async def ingest_event(payload: dict):
+async def ingest_event(payload: dict[str, Any]) -> dict[str, str]:
     tool_name = payload.get("tool_name", "")
+    event: SessionEvent | TaskEvent | ToolEvent
 
     if payload.get("phase") == "stop":
         event = SessionEvent(session_type="stop")
@@ -58,19 +79,19 @@ async def ingest_event(payload: dict):
             input_summary=input_summary,
         )
 
-    event_dict = event.model_dump(mode="json")
-    event_buffer.append(event_dict)
-    await broadcast(event_dict)
+    # The store redacts before persisting; broadcast the same redacted copy.
+    clean = get_store().add_event(event.model_dump(mode="json"))
+    await broadcast(clean)
     return {"status": "ok"}
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
+async def websocket_endpoint(ws: WebSocket) -> None:
     await ws.accept()
     active_connections.append(ws)
     try:
-        # Replay buffered history to the newly connected client
-        for event_dict in list(event_buffer):
+        # Replay persisted history to the newly connected client
+        for event_dict in get_store().recent_events(REPLAY_LIMIT):
             await ws.send_json(event_dict)
         # Keep the connection alive
         while True:
@@ -81,11 +102,11 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, Any]:
     return {
         "status": "running",
         "connections": len(active_connections),
-        "buffered_events": len(event_buffer),
+        "stored_events": get_store().event_count(),
     }
 
 
