@@ -77,17 +77,13 @@ def _traceback_signature(lines: list[str]) -> list[str]:
     """Signatures of each traceback in the block (its final exception line)."""
     sigs: list[str] = []
     in_tb = False
-    last_exc: str | None = None
     for line in lines:
         if _TRACEBACK_START.match(line):
             in_tb = True
-            last_exc = None
             continue
-        if in_tb:
-            if _EXC_LINE.match(line):
-                last_exc = line.strip()
-                sigs.append(last_exc)
-                in_tb = False
+        if in_tb and _EXC_LINE.match(line):
+            sigs.append(line.strip())
+            in_tb = False
     if in_tb:  # truncated traceback at EOF
         sigs.append("Traceback (truncated)")
     return sigs
@@ -99,9 +95,10 @@ def scan_block(block: RunBlock, target_name: str, file_name: str) -> list[Findin
 
     if block.exit_code is not None and block.exit_code != 0:
         sig = normalize_signature(tail[-1]) if tail else ""
+        code = str(block.exit_code)
         findings.append(
             Finding(
-                fingerprint=make_fingerprint(target_name, block.task, "exit", str(block.exit_code), sig),
+                fingerprint=make_fingerprint(target_name, block.task, "exit", code, sig),
                 source=SOURCE,
                 severity="high",
                 title=f"{target_name}/{block.task}: run failed with exit {block.exit_code}",
@@ -116,9 +113,10 @@ def scan_block(block: RunBlock, target_name: str, file_name: str) -> list[Findin
         )
 
     for exc in _traceback_signature(block.lines):
+        exc_sig = normalize_signature(exc)
         findings.append(
             Finding(
-                fingerprint=make_fingerprint(target_name, block.task, "traceback", normalize_signature(exc)),
+                fingerprint=make_fingerprint(target_name, block.task, "traceback", exc_sig),
                 source=SOURCE,
                 severity="high",
                 title=f"{target_name}/{block.task}: {exc[:80]}",
