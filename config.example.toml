@@ -1,0 +1,38 @@
+# cmd-overwatch configuration — copy to config.toml and edit.
+# config.toml is gitignored: machine-specific paths never reach the repository.
+
+# Safe-by-default: nothing executes, purges, or sends until you flip this.
+dry_run = true
+
+# Days to keep day-logs in each target's log_dir before purge eligibility.
+retention_days = 30
+
+# Where overwatch keeps its own runtime data (SQLite DB, transcripts) and reports.
+data_dir = "data"
+reports_dir = "reports"
+
+# Windows Task Scheduler folders to health-check (missed runs, failures, stuck tasks).
+task_folders = ["\\MyAutomation\\"]
+
+[server]
+# Must be a loopback address — the dashboard is unauthenticated by design.
+host = "127.0.0.1"
+port = 8765
+
+# Each [[targets]] entry is one watched project: a git repo to check hygiene on
+# and/or a log directory to scan for failures. Set one or both.
+[[targets]]
+name = "example-project"
+repo = "C:/projects/example-project"
+log_dir = "C:/projects/example-project/logs"
+log_glob = "*.log"
+
+[[targets]]
+name = "nightly-jobs"
+log_dir = "C:/automation/logs"
+
+[gates]
+# Extra patterns that force a solution into the approval queue.
+# Built-in gate categories (secrets, main-branch merges, deletions, auth/network,
+# publishing, customer data, money) can never be removed — only extended.
+extra_patterns = ["deploy", "terraform"]

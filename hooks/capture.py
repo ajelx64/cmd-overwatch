@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Claude Code hook: captures tool events and POSTs to Claude Overwatch server."""
 
-import sys
 import json
+import sys
 
 
 def main():

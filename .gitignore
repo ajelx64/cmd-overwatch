@@ -8,3 +8,17 @@ build/
 .worktrees/
 venv/
 .venv/
+
+# Runtime artifacts — never committed (see SECURITY.md)
+data/
+reports/
+config.toml
+*.db
+*.db-wal
+*.db-shm
+transcripts/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
