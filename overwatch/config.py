@@ -43,6 +43,9 @@ class Target:
     repo: Path | None = None
     log_dir: Path | None = None
     log_glob: str = DEFAULT_LOG_GLOB
+    # If set, raise an issue when the newest matching log is older than this —
+    # catches schedules that silently stopped running (e.g. backups).
+    max_log_age_hours: int | None = None
 
 
 @dataclass(frozen=True)
@@ -79,11 +82,17 @@ def _parse_target(raw: dict[str, object], index: int) -> Target:
     log_glob = raw.get("log_glob", DEFAULT_LOG_GLOB)
     if not isinstance(log_glob, str) or not log_glob.strip():
         raise ConfigError(f"targets[{index}] ({name!r}): 'log_glob' must be a non-empty string")
+    max_age = raw.get("max_log_age_hours")
+    if max_age is not None and (not isinstance(max_age, int) or max_age < 1):
+        raise ConfigError(
+            f"targets[{index}] ({name!r}): 'max_log_age_hours' must be a positive integer"
+        )
     return Target(
         name=name.strip(),
         repo=Path(str(repo)) if repo is not None else None,
         log_dir=Path(str(log_dir)) if log_dir is not None else None,
         log_glob=log_glob,
+        max_log_age_hours=max_age,
     )
 
 
