@@ -1,8 +1,9 @@
 from collections import deque
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
-from models import ToolEvent, TaskEvent, SessionEvent
+from models import SessionEvent, TaskEvent, ToolEvent
 
 app = FastAPI()
 

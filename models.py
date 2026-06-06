@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Optional, Union, Literal
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -8,7 +9,7 @@ class ToolEvent(BaseModel):
     phase: str  # "pre" or "post"
     tool_name: str
     input_summary: str = ""
-    duration_ms: Optional[float] = None
+    duration_ms: float | None = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -17,7 +18,7 @@ class TaskEvent(BaseModel):
     task_id: str
     title: str
     status: str  # "pending", "in_progress", "completed", "deleted"
-    last_tool: Optional[str] = None
+    last_tool: str | None = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -27,4 +28,4 @@ class SessionEvent(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
-AnyEvent = Union[ToolEvent, TaskEvent, SessionEvent]
+AnyEvent = ToolEvent | TaskEvent | SessionEvent
