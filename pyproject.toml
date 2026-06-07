@@ -41,6 +41,7 @@ packages = { find = { include = ["overwatch*"] } }
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+exclude = ["scheduler/*.ps1", "*.ps1"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
