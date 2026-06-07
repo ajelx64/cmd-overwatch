@@ -59,7 +59,7 @@ $action = New-ScheduledTaskAction -Execute $pwshPath -Argument (
 # Repeat all day, every day; StartWhenAvailable catches up missed runs after wake.
 $trigger = New-ScheduledTaskTrigger -Once -At $StartAt `
     -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) `
-    -RepetitionDuration ([TimeSpan]::MaxValue)
+    -RepetitionDuration (New-TimeSpan -Days 3650)
 
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
