@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -245,7 +246,10 @@ async def latest_aar() -> dict[str, Any]:
     record = get_store().latest_aar()
     if record is None:
         raise HTTPException(status_code=404, detail="no AAR generated yet")
-    return record
+    result = dict(record)
+    p = Path(record["path"])
+    result["content"] = p.read_text(encoding="utf-8") if p.exists() else None
+    return result
 
 
 # Static file mount MUST be last

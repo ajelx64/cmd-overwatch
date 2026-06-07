@@ -20,43 +20,112 @@
     <span class="stats" id="stats">Waiting...</span>
   </header>
 
-  <main class="main-grid">
+  <nav class="tab-strip">
+    <button class="tab-btn active" data-tab="live">Live</button>
+    <button class="tab-btn" data-tab="health">Health</button>
+    <button class="tab-btn" data-tab="issues">Issues</button>
+    <button class="tab-btn" data-tab="approvals">
+      Approvals
+      <span class="badge" id="approval-badge" style="display:none">0</span>
+    </button>
+    <button class="tab-btn" data-tab="aar">AAR</button>
+  </nav>
 
-    <!-- LEFT: Task Board -->
-    <section class="panel" id="task-board-panel">
-      <div class="panel-header">Task Board</div>
-      <div class="panel-body" id="task-board">
-        <div class="empty-state" id="task-empty">No tasks yet</div>
-        <div class="task-section" id="section-in_progress">
-          <div class="task-section-label status-in_progress">
-            <span class="dot"></span> In Progress
+  <!-- ── Tab: Live ─────────────────────────────────────────────────────────── -->
+  <div id="tab-live" class="tab-content active">
+    <main class="main-grid">
+      <section class="panel" id="task-board-panel">
+        <div class="panel-header">Task Board</div>
+        <div class="panel-body" id="task-board">
+          <div class="empty-state" id="task-empty">No tasks yet</div>
+          <div class="task-section" id="section-in_progress">
+            <div class="task-section-label status-in_progress">
+              <span class="dot"></span> In Progress
+            </div>
+            <div class="task-list" id="tasks-in_progress"></div>
           </div>
-          <div class="task-list" id="tasks-in_progress"></div>
-        </div>
-        <div class="task-section" id="section-pending">
-          <div class="task-section-label status-pending">
-            <span class="dot"></span> Queued
+          <div class="task-section" id="section-pending">
+            <div class="task-section-label status-pending">
+              <span class="dot"></span> Queued
+            </div>
+            <div class="task-list" id="tasks-pending"></div>
           </div>
-          <div class="task-list" id="tasks-pending"></div>
-        </div>
-        <div class="task-section" id="section-completed">
-          <div class="task-section-label status-completed">
-            <span class="dot"></span> Done
+          <div class="task-section" id="section-completed">
+            <div class="task-section-label status-completed">
+              <span class="dot"></span> Done
+            </div>
+            <div class="task-list" id="tasks-completed"></div>
           </div>
-          <div class="task-list" id="tasks-completed"></div>
         </div>
+      </section>
+
+      <section class="panel" id="live-feed-panel">
+        <div class="panel-header">Live Feed</div>
+        <div class="panel-body" id="live-feed">
+          <div class="empty-state" id="feed-empty">Connecting to Claude Overwatch...</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ── Tab: Health ───────────────────────────────────────────────────────── -->
+  <div id="tab-health" class="tab-content hidden">
+    <div class="tab-page">
+      <div class="tab-page-header">
+        <span id="health-dry-run-badge" class="dry-run-badge" style="display:none">DRY-RUN</span>
+        <span id="health-updated" class="updated-label"></span>
       </div>
-    </section>
-
-    <!-- RIGHT: Live Feed -->
-    <section class="panel" id="live-feed-panel">
-      <div class="panel-header">Live Feed</div>
-      <div class="panel-body" id="live-feed">
-        <div class="empty-state" id="feed-empty">Connecting to Claude Overwatch...</div>
+      <div class="health-summary" id="health-summary"></div>
+      <div class="tiles-grid" id="health-tiles">
+        <div class="empty-state">Loading health data…</div>
       </div>
-    </section>
+      <div class="host-metrics" id="host-metrics"></div>
+    </div>
+  </div>
 
-  </main>
+  <!-- ── Tab: Issues ───────────────────────────────────────────────────────── -->
+  <div id="tab-issues" class="tab-content hidden">
+    <div class="tab-page">
+      <div class="tab-page-header">
+        <div class="filter-btns" id="issue-filters">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="open">Open</button>
+          <button class="filter-btn" data-filter="pending_approval">Pending</button>
+          <button class="filter-btn" data-filter="resolved">Resolved</button>
+          <button class="filter-btn" data-filter="failed">Failed</button>
+        </div>
+        <span id="issues-updated" class="updated-label"></span>
+      </div>
+      <div id="issues-list">
+        <div class="empty-state">Loading issues…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Approvals ────────────────────────────────────────────────────── -->
+  <div id="tab-approvals" class="tab-content hidden">
+    <div class="tab-page">
+      <div class="tab-page-header">
+        <span id="approvals-updated" class="updated-label"></span>
+      </div>
+      <div id="approvals-list">
+        <div class="empty-state">Loading approvals…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: AAR ──────────────────────────────────────────────────────────── -->
+  <div id="tab-aar" class="tab-content hidden">
+    <div class="tab-page">
+      <div class="tab-page-header">
+        <span id="aar-updated" class="updated-label"></span>
+      </div>
+      <div id="aar-summary-bar" class="aar-summary-bar"></div>
+      <div class="aar-content-wrap">
+        <pre id="aar-content" class="aar-content">Loading AAR…</pre>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="dashboard.js"></script>
 </body>

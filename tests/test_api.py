@@ -154,6 +154,20 @@ def test_aar_404_before_first_report(client: TestClient) -> None:
     assert client.get("/api/aar/latest").status_code == 404
 
 
+def test_aar_latest_includes_content_field(client: TestClient, tmp_path: Path) -> None:
+    report_file = tmp_path / "aar_test.md"
+    report_file.write_text("# AAR\nAll good.", encoding="utf-8")
+    store = server_mod.store
+    assert store is not None
+    store.add_aar_record("2026-06-06", str(report_file), "All good.")
+    resp = client.get("/api/aar/latest")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["report_date"] == "2026-06-06"
+    assert "content" in body
+    assert body["content"] == "# AAR\nAll good."
+
+
 def test_event_ingest_still_works(client: TestClient) -> None:
     resp = client.post(
         "/event", json={"phase": "pre", "tool_name": "Read", "tool_input": {"file_path": "x"}}
