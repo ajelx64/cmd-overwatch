@@ -22,7 +22,8 @@ pwsh -NoProfile -File scheduler\Install-Schedule.ps1 -IntervalMinutes 15
 param(
     [string] $TaskFolder      = '\Overwatch\',
     [int]    $IntervalMinutes = 30,
-    [string] $StartAt         = '06:00'
+    [string] $StartAt         = '06:00',
+    [string] $AarAt           = '07:30'   # daily after-action report
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -33,7 +34,7 @@ if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host 'Elevation required (task registration) — relaunching as administrator...'
     $relaunch = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
                   '-TaskFolder', $TaskFolder, '-IntervalMinutes', $IntervalMinutes,
-                  '-StartAt', $StartAt)
+                  '-StartAt', $StartAt, '-AarAt', $AarAt)
     Start-Process -FilePath (Get-Command pwsh).Source -Verb RunAs -Wait -ArgumentList $relaunch
     return
 }
@@ -69,6 +70,21 @@ $settings = New-ScheduledTaskSettingsSet `
 Register-ScheduledTask -TaskPath $TaskFolder -TaskName 'Collector' `
     -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 
+# Daily AAR: one run each morning, after the early scheduled jobs have reported in.
+$aarAction = New-ScheduledTaskAction -Execute $pwshPath -Argument (
+    '-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f (Join-Path $PSScriptRoot 'run_aar.ps1')
+) -WorkingDirectory $root
+$aarTrigger  = New-ScheduledTaskTrigger -Daily -At $AarAt
+$aarSettings = New-ScheduledTaskSettingsSet `
+    -StartWhenAvailable `
+    -MultipleInstances IgnoreNew `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 10) `
+    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+
+Register-ScheduledTask -TaskPath $TaskFolder -TaskName 'Daily AAR' `
+    -Action $aarAction -Trigger $aarTrigger -Principal $principal -Settings $aarSettings -Force | Out-Null
+
 Write-Host ("Registered {0}Collector — every {1} min (S4U, Limited)." -f $TaskFolder, $IntervalMinutes)
+Write-Host ("Registered {0}Daily AAR — daily at {1} (S4U, Limited)." -f $TaskFolder, $AarAt)
 Get-ScheduledTask -TaskPath $TaskFolder | Format-Table TaskName, State -AutoSize
 try { Stop-Transcript | Out-Null } catch {}
