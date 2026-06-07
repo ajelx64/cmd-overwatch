@@ -223,3 +223,398 @@ body {
   color: var(--text-secondary);
   font-size: 13px;
 }
+
+/* ─── TAB STRIP ──────────────────────────────── */
+.tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 16px;
+  height: 44px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.tab-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.05);
+}
+
+.tab-btn.active {
+  color: var(--accent-active);
+  background: rgba(34,211,238,0.08);
+  border-color: rgba(34,211,238,0.2);
+}
+
+.badge {
+  background: var(--accent-bash);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ─── TAB CONTENT ────────────────────────────── */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Live tab: keep the original grid sizing */
+#tab-live { height: calc(100vh - 56px - 44px); }
+#tab-live .main-grid {
+  height: 100%;
+  grid-template-columns: 40% 60%;
+  gap: 16px;
+  padding: 16px;
+}
+
+/* All other tabs: scrollable single-column */
+.tab-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 24px;
+}
+
+.tab-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.updated-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.dry-run-badge {
+  background: rgba(245,158,11,0.15);
+  border: 1px solid rgba(245,158,11,0.4);
+  color: var(--accent-edit);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 2px 10px;
+  border-radius: 4px;
+}
+
+/* ─── HEALTH TAB ─────────────────────────────── */
+.health-summary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.sev-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--panel-border);
+}
+
+.sev-critical { border-left: 3px solid #ef4444; }
+.sev-high     { border-left: 3px solid #f59e0b; }
+.sev-medium   { border-left: 3px solid #eab308; }
+.sev-low      { border-left: 3px solid #10b981; }
+
+.tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.health-tile {
+  background: var(--panel-bg);
+  backdrop-filter: var(--panel-blur);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  border-left-width: 3px;
+}
+
+.health-tile.sev-critical { border-left-color: #ef4444; }
+.health-tile.sev-high     { border-left-color: #f59e0b; }
+.health-tile.sev-medium   { border-left-color: #eab308; }
+.health-tile.sev-low      { border-left-color: #10b981; }
+
+.tile-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.tile-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.host-metrics {
+  margin-top: 8px;
+}
+
+.host-metrics-header {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.metric-healthy { color: var(--accent-done); }
+.metric-warn    { color: var(--accent-edit); }
+
+/* ─── ISSUES TAB ─────────────────────────────── */
+.filter-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.filter-btn {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.2); }
+
+.filter-btn.active {
+  color: var(--accent-active);
+  border-color: var(--accent-active);
+  background: rgba(34,211,238,0.08);
+}
+
+.issue-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border-left-width: 3px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.issue-card:hover { background: rgba(255,255,255,0.06); }
+
+.issue-card.sev-critical { border-left-color: #ef4444; }
+.issue-card.sev-high     { border-left-color: #f59e0b; }
+.issue-card.sev-medium   { border-left-color: #eab308; }
+.issue-card.sev-low      { border-left-color: #10b981; }
+
+.issue-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.issue-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.status-pill {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  background: rgba(255,255,255,0.08);
+  color: var(--text-secondary);
+}
+
+.status-pill.status-open             { color: var(--accent-active); }
+.status-pill.status-drafted          { color: var(--accent-agent); }
+.status-pill.status-pending_approval { color: var(--accent-edit); }
+.status-pill.status-executing        { color: var(--accent-active); }
+.status-pill.status-resolved         { color: var(--accent-done); }
+.status-pill.status-failed           { color: var(--accent-bash); }
+
+/* ─── APPROVALS TAB ──────────────────────────── */
+.approval-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.approval-issue-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.approval-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.approval-plan {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.approval-gate {
+  font-size: 11px;
+  color: var(--accent-edit);
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.approval-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-approve, .btn-deny {
+  padding: 6px 18px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s;
+}
+
+.btn-approve {
+  background: rgba(16,185,129,0.2);
+  border: 1px solid rgba(16,185,129,0.4);
+  color: var(--accent-done);
+}
+
+.btn-deny {
+  background: rgba(239,68,68,0.15);
+  border: 1px solid rgba(239,68,68,0.3);
+  color: var(--accent-bash);
+}
+
+.btn-approve:hover { opacity: 0.8; }
+.btn-deny:hover    { opacity: 0.8; }
+
+.btn-approve:disabled, .btn-deny:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.wontfix-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.decision-result {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.decision-result.approved { color: var(--accent-done); }
+.decision-result.denied   { color: var(--accent-bash); }
+.decision-result.error    { color: var(--accent-edit); }
+
+/* ─── AAR TAB ────────────────────────────────── */
+.aar-summary-bar {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.aar-content-wrap {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.aar-content {
+  padding: 20px 24px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
