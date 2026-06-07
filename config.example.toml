@@ -36,3 +36,17 @@ log_dir = "C:/automation/logs"
 # Built-in gate categories (secrets, main-branch merges, deletions, auth/network,
 # publishing, customer data, money) can never be removed — only extended.
 extra_patterns = ["deploy", "terraform"]
+
+[notify]
+# Set discord = true and export OVERWATCH_DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+discord = false
+# Set email = true and configure smtp below + export OVERWATCH_SMTP_PASSWORD=...
+email = false
+
+[notify.smtp]
+host = "smtp.gmail.com"
+port = 587
+user = "your-address@gmail.com"
+from_addr = "your-address@gmail.com"
+to_addr = "recipient@example.com"
+# password comes from OVERWATCH_SMTP_PASSWORD env var — never put it here
