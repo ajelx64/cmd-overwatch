@@ -23,6 +23,7 @@ from datetime import datetime
 from overwatch.collector import git_hygiene, host_health, log_scan, sched_tasks
 from overwatch.config import Config, load_config
 from overwatch.detect.rules import Finding, make_fingerprint, persist_findings
+from overwatch.solution.pipeline import dispatch_solution, draft_new_issues
 from overwatch.store import Store
 
 SIGNALS = ("logs", "sched", "git", "host")
@@ -105,11 +106,19 @@ def main(argv: list[str] | None = None) -> int:
         ids = persist_findings(store, findings)
         for m in metrics:
             store.add_host_health(m.metric, m.value, m.healthy)
-        open_count = len(store.list_issues(status="open"))
-        print(
-            f"[collector] persisted {len(ids)} issue(s) "
-            f"({by_sev or 'none'}); open issues now: {open_count}"
-        )
+        print(f"[collector] persisted {len(ids)} issue(s) ({by_sev or 'none'})")
+
+        drafted = draft_new_issues(store, cfg)
+        for issue_id, sid, gated in drafted:
+            route = "pending approval" if gated else "auto"
+            print(f"[pipeline] issue #{issue_id}: solution #{sid} drafted -> {route}")
+            if not gated:
+                solution = store.get_solution(sid)
+                assert solution is not None
+                result = dispatch_solution(store, cfg, solution)
+                print(f"[pipeline]   dispatch: {result.status} — {result.detail}")
+        pending = len(store.list_issues(status="pending_approval"))
+        print(f"[collector] pending approvals: {pending}")
     finally:
         store.close()
     return 0

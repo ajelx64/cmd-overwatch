@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS solutions (
     created_at TEXT NOT NULL,
     body_md TEXT NOT NULL,
     gate_category TEXT NOT NULL,
-    auto_eligible INTEGER NOT NULL DEFAULT 0
+    auto_eligible INTEGER NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL DEFAULT 'investigate-fix'
 );
 CREATE TABLE IF NOT EXISTS approvals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,7 +123,16 @@ class Store:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Additive migrations for databases created by earlier versions."""
+        cols = {r["name"] for r in self._conn.execute("PRAGMA table_info(solutions)")}
+        if "kind" not in cols:
+            self._conn.execute(
+                "ALTER TABLE solutions ADD COLUMN kind TEXT NOT NULL DEFAULT 'investigate-fix'"
+            )
 
     def close(self) -> None:
         self._conn.close()
@@ -230,13 +240,18 @@ class Store:
     # -- solutions ---------------------------------------------------------
 
     def add_solution(
-        self, issue_id: int, body_md: str, gate_category: str, auto_eligible: bool
+        self,
+        issue_id: int,
+        body_md: str,
+        gate_category: str,
+        auto_eligible: bool,
+        kind: str = "investigate-fix",
     ) -> int:
         with self._conn:
             cur = self._conn.execute(
                 "INSERT INTO solutions (issue_id, created_at, body_md, gate_category,"
-                " auto_eligible) VALUES (?, ?, ?, ?, ?)",
-                (issue_id, _now(), redact_text(body_md), gate_category, int(auto_eligible)),
+                " auto_eligible, kind) VALUES (?, ?, ?, ?, ?, ?)",
+                (issue_id, _now(), redact_text(body_md), gate_category, int(auto_eligible), kind),
             )
             return int(cur.lastrowid)  # type: ignore[arg-type]
 

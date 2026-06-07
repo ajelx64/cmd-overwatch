@@ -71,14 +71,18 @@ def test_main_dry_run_writes_nothing(tmp_path: Path) -> None:
     assert not cfg.db_path.exists()
 
 
-def test_main_persists_issues(tmp_path: Path) -> None:
+def test_main_persists_drafts_and_queues(tmp_path: Path) -> None:
     cfg, cfg_file = make_config(tmp_path)
     rc = main(["--only", "logs", "--config", str(cfg_file)])
     assert rc == 0
     store = Store(cfg.db_path)
-    issues = store.list_issues(status="open")
+    # the failure was detected, drafted, and (being a free-form fix) gated
+    issues = store.list_issues(status="pending_approval")
     assert len(issues) == 1
     assert issues[0]["source"] == "log_scan"
+    solutions = store.solutions_for_issue(issues[0]["id"])
+    assert len(solutions) == 1
+    assert solutions[0]["kind"] == "investigate-fix"
     store.close()
 
 
