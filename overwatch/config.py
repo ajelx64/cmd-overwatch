@@ -36,6 +36,32 @@ class ConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class SmtpConfig:
+    """SMTP connection settings. Credentials come from environment variables."""
+
+    host: str = ""
+    port: int = 587
+    user: str = ""
+    password: str = ""
+    from_addr: str = ""
+    to_addr: str = ""
+
+
+@dataclass(frozen=True)
+class NotifyConfig:
+    """Notification channel configuration.
+
+    Enable channels with ``discord = true`` / ``email = true`` in ``[notify]``.
+    Credentials (webhook URL, SMTP password) are read from environment variables
+    at send time — never stored in config.toml.
+    """
+
+    discord: bool = False
+    email: bool = False
+    smtp: SmtpConfig = field(default_factory=SmtpConfig)
+
+
+@dataclass(frozen=True)
 class Target:
     """One watched project: a repo to check hygiene on and/or a log dir to scan."""
 
@@ -61,6 +87,7 @@ class Config:
     data_dir: Path = field(default_factory=lambda: Path("data"))
     reports_dir: Path = field(default_factory=lambda: Path("reports"))
     extra_gate_patterns: tuple[str, ...] = ()
+    notify: NotifyConfig = field(default_factory=NotifyConfig)
 
     @property
     def db_path(self) -> Path:
@@ -93,6 +120,28 @@ def _parse_target(raw: dict[str, object], index: int) -> Target:
         log_dir=Path(str(log_dir)) if log_dir is not None else None,
         log_glob=log_glob,
         max_log_age_hours=max_age,
+    )
+
+
+def _parse_notify(raw: object) -> NotifyConfig:
+    """Parse the ``[notify]`` TOML table into a :class:`NotifyConfig`."""
+    if not isinstance(raw, dict):
+        return NotifyConfig()
+    smtp_raw = raw.get("smtp", {})
+    if not isinstance(smtp_raw, dict):
+        smtp_raw = {}
+    smtp = SmtpConfig(
+        host=str(smtp_raw.get("host", "")),
+        port=int(smtp_raw.get("port", 587)),
+        user=str(smtp_raw.get("user", "")),
+        password=str(smtp_raw.get("password", "")),
+        from_addr=str(smtp_raw.get("from_addr", "")),
+        to_addr=str(smtp_raw.get("to_addr", "")),
+    )
+    return NotifyConfig(
+        discord=bool(raw.get("discord", False)),
+        email=bool(raw.get("email", False)),
+        smtp=smtp,
     )
 
 
@@ -152,6 +201,8 @@ def load_config(path: Path | str | None = None) -> Config:
     task_folders = tuple(str(f) for f in raw.get("task_folders", []))
     extra_gate_patterns = tuple(str(p) for p in gates.get("extra_patterns", []))
 
+    notify_cfg = _parse_notify(raw.get("notify", {}))
+
     cfg = Config(
         targets=targets,
         task_folders=task_folders,
@@ -162,5 +213,6 @@ def load_config(path: Path | str | None = None) -> Config:
         data_dir=Path(str(raw.get("data_dir", "data"))),
         reports_dir=Path(str(raw.get("reports_dir", "reports"))),
         extra_gate_patterns=extra_gate_patterns,
+        notify=notify_cfg,
     )
     return _validate(cfg)

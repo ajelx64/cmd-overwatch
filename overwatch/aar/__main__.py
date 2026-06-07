@@ -15,6 +15,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="overwatch.aar", description=__doc__)
     parser.add_argument("--config", default=None, help="path to config.toml")
     parser.add_argument("--date", default=None, help="report date (default: today)")
+    parser.add_argument(
+        "--notify",
+        action="store_true",
+        default=False,
+        help="send notifications after generating the report",
+    )
     args = parser.parse_args(argv)
 
     cfg = load_config(args.config)
@@ -26,6 +32,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[aar] written: {path}")
         if record:
             print(f"[aar] summary: {record['summary']}")
+        if args.notify and record:
+            from overwatch.notify import send
+
+            send(cfg.notify, record["summary"], path, dry_run=cfg.dry_run)
     finally:
         store.close()
     return 0
