@@ -20,7 +20,7 @@ import sys
 from collections.abc import Callable
 from datetime import datetime
 
-from overwatch.collector import git_hygiene, host_health, log_scan, sched_tasks
+from overwatch.collector import git_hygiene, host_health, log_purge, log_scan, sched_tasks
 from overwatch.config import Config, load_config
 from overwatch.detect.rules import Finding, make_fingerprint, persist_findings
 from overwatch.solution.pipeline import dispatch_solution, draft_new_issues
@@ -107,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
         for m in metrics:
             store.add_host_health(m.metric, m.value, m.healthy)
         print(f"[collector] persisted {len(ids)} issue(s) ({by_sev or 'none'})")
+
+        log_purge.purge_all(cfg, store)
 
         drafted = draft_new_issues(store, cfg)
         for issue_id, sid, gated in drafted:
