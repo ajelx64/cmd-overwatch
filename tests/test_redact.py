@@ -2,6 +2,8 @@
 
 from typing import Any
 
+import pytest
+
 from overwatch.redact import redact_text, redact_value
 
 FAKE_ANTHROPIC = "sk-ant-api03-aaaabbbbccccddddeeeeffff0000111122223333"  # gitleaks:allow
@@ -99,8 +101,6 @@ def test_non_string_scalars_pass_through() -> None:
 
 # -- audit regression: redaction gaps (F1, F2, F4) and recursion bound (F16) ----
 
-FAKE_SLACK_APP = "xapp-1-A01234567-1234567890-abcdef0123456789beef"  # gitleaks:allow
-
 
 def test_assignment_value_with_separators_fully_redacted() -> None:
     # F1: a value containing commas must be redacted whole, not truncated at the
@@ -123,6 +123,7 @@ def test_connection_string_password_redacted() -> None:
     # F2: scheme://user:password@host — redact the password, keep scheme/host.
     out = redact_text("DATABASE_URL=postgres://appuser:s3cr3tPassw0rd@db.internal:5432/app")
     assert "s3cr3tPassw0rd" not in out
+    assert "[REDACTED:uri-credentials]" in out
     assert "postgres://" in out
     assert "db.internal" in out
 
@@ -133,10 +134,14 @@ def test_mongodb_uri_password_redacted() -> None:
     assert "TopSecretValue9000" not in out
 
 
-def test_slack_app_and_refresh_tokens_redacted() -> None:
-    # F4: modern Slack prefixes (xapp-, xoxe-) carry real privilege and were missed.
-    out = redact_text(f"posting via {FAKE_SLACK_APP}")
-    assert FAKE_SLACK_APP not in out
+@pytest.mark.parametrize("prefix", ["xapp-1", "xoxe-1", "xoxc-2"])
+def test_modern_slack_token_prefixes_redacted(prefix: str) -> None:
+    # F4: xapp-/xoxe-/xoxc- carry real privilege and were previously missed.
+    # Tokens are assembled at runtime so the source holds no literal secret
+    # (keeps GitHub push protection / secret scanners from flagging the fixture).
+    token = f"{prefix}-{'ab12cd34ef' * 3}"
+    out = redact_text(f"posting via {token}")
+    assert token not in out
     assert "[REDACTED:slack-token]" in out
 
 
