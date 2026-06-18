@@ -221,3 +221,12 @@ def test_issue_without_repo_target_fails(env: dict[str, Any]) -> None:
     result = Executor(env["store"], live_cfg(env)).execute(iid, sid)
     assert result.status == "failed"
     assert "no usable target repo" in result.detail
+
+
+def test_lock_acquire_is_atomic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # F15: even if the existence pre-check is bypassed (the TOCTOU window between
+    # checking and writing), the atomic O_EXCL create must block a second holder.
+    lock = ExecutorLock(tmp_path)
+    assert lock.acquire() is True
+    monkeypatch.setattr(Path, "exists", lambda self: False)  # simulate the race window
+    assert ExecutorLock(tmp_path).acquire() is False

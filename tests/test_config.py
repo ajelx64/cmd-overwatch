@@ -121,3 +121,16 @@ def test_env_var_resolution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("OVERWATCH_CONFIG", str(p))
     cfg = load_config()
     assert cfg.retention_days == 14
+
+
+@pytest.mark.parametrize(
+    "host",
+    ["::", "192.168.1.50", "10.0.0.1", "0.0.0.0", "::ffff:127.0.0.1", ""],
+)
+def test_additional_non_loopback_hosts_refused(tmp_path: Path, host: str) -> None:
+    # Lock in fail-closed rejection of every non-loopback bind form: IPv6
+    # any-address, LAN IPs, the v4-mapped-v6 loopback alias, and empty string.
+    # The dashboard is unauthenticated; a routable bind must never load.
+    p = write(tmp_path, f'[server]\nhost = "{host}"\n')
+    with pytest.raises(ConfigError, match="loopback"):
+        load_config(p)

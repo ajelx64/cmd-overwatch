@@ -16,6 +16,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     cfg = Config(
         targets=(Target(name="proj", repo=tmp_path / "repo"),),
         data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
         dry_run=True,
     )
     store = Store(cfg.db_path)
@@ -154,8 +155,10 @@ def test_aar_404_before_first_report(client: TestClient) -> None:
     assert client.get("/api/aar/latest").status_code == 404
 
 
-def test_aar_latest_includes_content_field(client: TestClient, tmp_path: Path) -> None:
-    report_file = tmp_path / "aar_test.md"
+def test_aar_latest_includes_content_field(client: TestClient) -> None:
+    reports = server_mod.config.reports_dir
+    reports.mkdir(parents=True, exist_ok=True)
+    report_file = reports / "aar_test.md"
     report_file.write_text("# AAR\nAll good.", encoding="utf-8")
     store = server_mod.store
     assert store is not None
@@ -168,9 +171,41 @@ def test_aar_latest_includes_content_field(client: TestClient, tmp_path: Path) -
     assert body["content"] == "# AAR\nAll good."
 
 
+def test_aar_latest_refuses_path_outside_reports_dir(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # F18: a stored AAR path escaping reports_dir must not be read back — defends
+    # against a tampered record turning this endpoint into arbitrary file read.
+    outside = tmp_path / "outside" / "secret.txt"
+    outside.parent.mkdir(parents=True, exist_ok=True)
+    outside.write_text("TOP SECRET", encoding="utf-8")
+    store = server_mod.store
+    assert store is not None
+    store.add_aar_record("2026-06-07", str(outside), "summary")
+    resp = client.get("/api/aar/latest")
+    assert resp.status_code == 200
+    assert resp.json()["content"] is None
+
+
 def test_event_ingest_still_works(client: TestClient) -> None:
     resp = client.post(
         "/event", json={"phase": "pre", "tool_name": "Read", "tool_input": {"file_path": "x"}}
     )
     assert resp.json() == {"status": "ok"}
     assert client.get("/health").json()["stored_events"] == 1
+
+
+def test_event_non_dict_tool_input_does_not_crash(client: TestClient) -> None:
+    # F17: tool_input arriving as a non-mapping (string/list/int/bool) from the
+    # untrusted hook must never 500 the endpoint.
+    for bad in ("just-a-string", ["a", "b"], 42, True):
+        resp = client.post(
+            "/event", json={"phase": "pre", "tool_name": "Read", "tool_input": bad}
+        )
+        assert resp.status_code == 200, f"tool_input={bad!r} -> {resp.status_code}"
+
+
+def test_event_task_create_non_dict_tool_input(client: TestClient) -> None:
+    # F17: the TaskCreate/Update branch also assumed a dict (.get) and crashed.
+    resp = client.post("/event", json={"tool_name": "TaskCreate", "tool_input": "oops"})
+    assert resp.status_code == 200

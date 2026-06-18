@@ -57,19 +57,22 @@ async def broadcast(event_dict: dict[str, Any]) -> None:
 @app.post("/event")
 async def ingest_event(payload: dict[str, Any]) -> dict[str, str]:
     tool_name = payload.get("tool_name", "")
+    # tool_input arrives from an untrusted hook and may be any JSON type; only a
+    # mapping is usable. Anything else (string/list/scalar) is treated as empty
+    # so a malformed payload can never crash this unauthenticated endpoint.
+    raw_input = payload.get("tool_input", {})
+    tool_input = raw_input if isinstance(raw_input, dict) else {}
     event: SessionEvent | TaskEvent | ToolEvent
 
     if payload.get("phase") == "stop":
         event = SessionEvent(session_type="stop")
     elif tool_name in ("TaskCreate", "TaskUpdate"):
-        tool_input = payload.get("tool_input", {})
         event = TaskEvent(
             task_id=tool_input.get("task_id", "unknown"),
             title=tool_input.get("title", "Unknown task"),
             status=tool_input.get("status", "pending"),
         )
     else:
-        tool_input = payload.get("tool_input", {}) or {}
         # Build input_summary from first key:value pair, truncated to 100 chars
         if tool_input:
             first_key = next(iter(tool_input))
@@ -241,14 +244,29 @@ async def reexecute(solution_id: int) -> dict[str, Any]:
     return {"status": result.status, "detail": result.detail, "branch": result.branch}
 
 
+def _read_report(stored_path: str) -> str | None:
+    """Read an AAR file, but only if it stays within the configured reports dir.
+
+    The stored path is normally written by the generator under ``reports_dir``;
+    this containment check ensures a tampered/foreign record cannot turn this
+    endpoint into an arbitrary file read.
+    """
+    try:
+        resolved = Path(stored_path).resolve()
+        if not resolved.is_relative_to(config.reports_dir.resolve()):
+            return None
+        return resolved.read_text(encoding="utf-8") if resolved.exists() else None
+    except OSError:
+        return None
+
+
 @app.get("/api/aar/latest")
 async def latest_aar() -> dict[str, Any]:
     record = get_store().latest_aar()
     if record is None:
         raise HTTPException(status_code=404, detail="no AAR generated yet")
     result = dict(record)
-    p = Path(record["path"])
-    result["content"] = p.read_text(encoding="utf-8") if p.exists() else None
+    result["content"] = _read_report(record["path"])
     return result
 
 
