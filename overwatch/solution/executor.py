@@ -93,9 +93,19 @@ class ExecutorLock:
                 age = time.time() - self.path.stat().st_mtime
                 if age < LOCK_STALE_S:
                     return False
+                self.path.unlink(missing_ok=True)  # reclaim a stale lock
             except OSError:
                 return False
-        self.path.write_text(f"{os.getpid()} {datetime.now(UTC).isoformat()}", encoding="utf-8")
+        # Atomic create: O_EXCL fails if another racer created the lock between
+        # the existence check above and here, so only one caller can win.
+        try:
+            fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except OSError:
+            return False  # lost the create race (or cannot create) — fail closed
+        try:
+            os.write(fd, f"{os.getpid()} {datetime.now(UTC).isoformat()}".encode())
+        finally:
+            os.close(fd)
         return True
 
     def release(self) -> None:

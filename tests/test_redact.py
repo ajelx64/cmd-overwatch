@@ -1,5 +1,9 @@
 """Redaction tests. All secrets here are synthetic fixtures, never real."""
 
+from typing import Any
+
+import pytest
+
 from overwatch.redact import redact_text, redact_value
 
 FAKE_ANTHROPIC = "sk-ant-api03-aaaabbbbccccddddeeeeffff0000111122223333"  # gitleaks:allow
@@ -93,3 +97,59 @@ def test_non_string_scalars_pass_through() -> None:
     assert redact_value(42) == 42
     assert redact_value(None) is None
     assert redact_value(3.14) == 3.14
+
+
+# -- audit regression: redaction gaps (F1, F2, F4) and recursion bound (F16) ----
+
+
+def test_assignment_value_with_separators_fully_redacted() -> None:
+    # F1: a value containing commas must be redacted whole, not truncated at the
+    # first separator (which previously left the tail in cleartext).
+    out = redact_text("password=a1b2c3d4,e5f6g7h8,i9j0k1l2")
+    assert "e5f6g7h8" not in out
+    assert "i9j0k1l2" not in out
+    assert "[REDACTED:assignment]" in out
+
+
+def test_quoted_assignment_value_with_spaces_redacted() -> None:
+    # F1: a quoted value with internal spaces must be fully redacted.
+    out = redact_text('client_secret = "abcd efgh ijkl mnop"')
+    assert "efgh" not in out
+    assert "mnop" not in out
+    assert "[REDACTED:assignment]" in out
+
+
+def test_connection_string_password_redacted() -> None:
+    # F2: scheme://user:password@host — redact the password, keep scheme/host.
+    out = redact_text("DATABASE_URL=postgres://appuser:s3cr3tPassw0rd@db.internal:5432/app")
+    assert "s3cr3tPassw0rd" not in out
+    assert "[REDACTED:uri-credentials]" in out
+    assert "postgres://" in out
+    assert "db.internal" in out
+
+
+def test_mongodb_uri_password_redacted() -> None:
+    # F2: a second scheme to prove the rule is not postgres-specific.
+    out = redact_text("mongodb://admin:TopSecretValue9000@cluster0.example.net/prod")
+    assert "TopSecretValue9000" not in out
+
+
+@pytest.mark.parametrize("prefix", ["xapp-1", "xoxe-1", "xoxc-2"])
+def test_modern_slack_token_prefixes_redacted(prefix: str) -> None:
+    # F4: xapp-/xoxe-/xoxc- carry real privilege and were previously missed.
+    # Tokens are assembled at runtime so the source holds no literal secret
+    # (keeps GitHub push protection / secret scanners from flagging the fixture).
+    token = f"{prefix}-{'ab12cd34ef' * 3}"
+    out = redact_text(f"posting via {token}")
+    assert token not in out
+    assert "[REDACTED:slack-token]" in out
+
+
+def test_redact_value_bounds_deep_recursion() -> None:
+    # F16: a hostile deeply-nested payload must not exhaust the stack
+    # (RecursionError -> 500 on the unauthenticated /event endpoint).
+    payload: Any = "leaf"
+    for _ in range(3000):
+        payload = {"next": payload}
+    clean = redact_value(payload)  # must return without raising RecursionError
+    assert clean is not None

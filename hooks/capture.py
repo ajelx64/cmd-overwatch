@@ -5,7 +5,7 @@ import json
 import sys
 
 
-def main():
+def main() -> None:
     phase = sys.argv[1] if len(sys.argv) > 1 else "unknown"
 
     try:
