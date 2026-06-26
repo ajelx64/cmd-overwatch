@@ -34,7 +34,7 @@ from typing import Any
 
 from overwatch.config import Config
 from overwatch.redact import redact_text
-from overwatch.store import Store
+from overwatch.store import Store, TransitionError
 
 DEFAULT_TIMEOUT_S = 600
 LOCK_STALE_S = 2 * DEFAULT_TIMEOUT_S
@@ -226,7 +226,7 @@ class Executor:
             return ExecutionResult(
                 "failed", f"agent exited {proc.returncode}", command, transcript, branch
             )
-        except (RuntimeError, OSError) as exc:
+        except (RuntimeError, OSError, TransitionError) as exc:
             with contextlib.suppress(Exception):
                 self.store.set_issue_status(issue_id, "failed")
             return ExecutionResult("failed", str(exc)[:300], command, transcript, branch)
