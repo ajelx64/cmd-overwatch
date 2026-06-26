@@ -186,3 +186,41 @@ def test_send_dry_run_logs_not_sends(
 
     captured = capsys.readouterr()
     assert "DRY-RUN" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# send() exception-swallowing coverage (lines 24-25, 46-47)
+# ---------------------------------------------------------------------------
+
+
+def test_send_discord_exception_caught_and_logged(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An exception raised inside send_discord must be swallowed and logged,
+    never propagated. (Covers notify/__init__.py lines 24-25.)
+    """
+    monkeypatch.setenv("OVERWATCH_DISCORD_WEBHOOK", WEBHOOK)
+    cfg = NotifyConfig(discord=True, email=False)
+
+    with patch("overwatch.notify.discord.send_discord", side_effect=RuntimeError("network down")):
+        send(cfg, SUMMARY, REPORT, dry_run=False)  # must not raise
+
+    captured = capsys.readouterr()
+    assert "discord error" in captured.out
+    assert "network down" in captured.out
+
+
+def test_send_email_exception_caught_and_logged(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An exception raised inside send_email must be swallowed and logged,
+    never propagated. (Covers notify/__init__.py lines 46-47.)
+    """
+    cfg = NotifyConfig(discord=False, email=True, smtp=_full_smtp())
+
+    with patch("overwatch.notify.email.send_email", side_effect=OSError("smtp unreachable")):
+        send(cfg, SUMMARY, REPORT, dry_run=False)  # must not raise
+
+    captured = capsys.readouterr()
+    assert "email error" in captured.out
+    assert "smtp unreachable" in captured.out
