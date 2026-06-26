@@ -215,21 +215,54 @@ def test_event_task_create_non_dict_tool_input(client: TestClient) -> None:
 
 
 def test_reexecute_on_resolved_issue_returns_failed_not_500(
-    client: TestClient, tmp_path: Path
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """NEW security finding (not in issue #16): when the executor's
-    set_issue_status("executing") raises TransitionError because the issue is
-    already resolved, the exception must be caught inside the executor and
-    returned as ExecutionResult("failed", ...) rather than propagating to a 500.
+    set_issue_status(issue_id, "executing") raises TransitionError because the
+    issue is already resolved, the exception must be caught inside the executor
+    and returned as ExecutionResult("failed", ...) rather than propagating out
+    of POST /api/solutions/{id}/execute as an unhandled 500.
 
-    Root cause: executor.py's except clause previously only caught
+    This test deliberately does NOT use the shared dry-run ``client`` fixture:
+    that fixture sets ``dry_run=True`` and a target repo with no ``.git``, so
+    execute() short-circuits at the "no usable target repo" / dry-run branches
+    (executor.py:157-158, 182-194) long BEFORE the try-block at line 200 where
+    the illegal transition is attempted — i.e. it would pass even with the bug.
+
+    To genuinely reach the failing path we build a LIVE-mode config
+    (``dry_run=False``) with a usable target repo. execute() only checks that
+    ``(repo / ".git")`` exists before the try-block, and the illegal transition
+    raises BEFORE any git command runs, so a bare ``.git`` dir is enough — the
+    test stays fast and spawns nothing.
+
+    Root cause: executor.py's except clause previously caught only
     (RuntimeError, OSError), not TransitionError (a ValueError subclass).
-    Fix: added TransitionError to the catch in Executor.execute().
+    Fix: added TransitionError to the catch in Executor.execute(). With the
+    fix reverted, TestClient re-raises the TransitionError (red); with the fix,
+    the endpoint returns 200 with a structured "failed" result (green).
     """
-    store = server_mod.store
-    assert store is not None
+    import overwatch.solution.executor as executor_mod
 
-    # Create an issue, add a solution, resolve it (simulate a completed cycle)
+    # A usable target repo: execute() only needs (repo / ".git") to exist to get
+    # past the repo pre-check; the illegal transition raises before `git worktree`.
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+
+    cfg = Config(
+        targets=(Target(name="proj", repo=repo),),
+        data_dir=tmp_path / "data",
+        reports_dir=tmp_path / "reports",
+        dry_run=False,  # LIVE mode: required to fall through to the try-block
+    )
+    store = Store(cfg.db_path)
+    monkeypatch.setattr(server_mod, "config", cfg)
+    monkeypatch.setattr(server_mod, "store", store)
+    # claude must look present, else execute() fails closed before the try-block.
+    monkeypatch.setattr(executor_mod.shutil, "which", lambda _: "C:/fake/claude.exe")
+    client = TestClient(server_mod.app)
+
+    # Seed an issue and drive it all the way to RESOLVED so the executor's
+    # set_issue_status(issue_id, "executing") is an illegal transition.
     issue_id = store.upsert_issue(
         "fp-reexec", "log_scan", "low", "proj/job: resolved issue",
         {"target": "proj", "task": "job"},
@@ -237,16 +270,17 @@ def test_reexecute_on_resolved_issue_returns_failed_not_500(
     sid = store.add_solution(
         issue_id, "## fix", "none", auto_eligible=True, kind="investigate-fix"
     )
-    # Advance to resolved: open -> drafted -> executing -> resolved
     store.set_issue_status(issue_id, "drafted")
     store.set_issue_status(issue_id, "executing")
     store.set_issue_status(issue_id, "resolved")
 
-    # Re-executing a resolved issue must never produce a 500.
-    # The executor tries set_issue_status(issue_id, "executing") on a resolved
-    # issue, which raises TransitionError — now caught and returned as "failed".
+    # Re-execute the resolved issue: the executor reaches the try-block and
+    # attempts resolved -> executing. Without the fix the TransitionError
+    # propagates (TestClient re-raises -> a 500); with the fix it is caught and
+    # returned as a structured "failed" result that names the illegal transition.
     resp = client.post(f"/api/solutions/{sid}/execute")
-    assert resp.status_code == 200, f"Expected 200, got 500: {resp.text}"
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
     body = resp.json()
-    # The response MUST be a structured result (failed/refused/dry-run), never a raw traceback.
-    assert body.get("status") in ("failed", "refused", "dry-run")
+    assert body["status"] == "failed"
+    assert "illegal transition" in body["detail"]
+    store.close()

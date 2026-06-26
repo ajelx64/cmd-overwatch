@@ -117,8 +117,12 @@ def test_powershell_exe_falls_back_to_powershell_when_pwsh_absent() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_query_tasks_empty_folders_returns_empty() -> None:
+def test_query_tasks_empty_folders_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """query_tasks with no folders must return [] without spawning a subprocess."""
+    def spy(*a: Any, **k: Any) -> None:
+        raise AssertionError("subprocess.run must not be called for empty task folders")
+
+    monkeypatch.setattr(sched_mod.subprocess, "run", spy)
     assert query_tasks(()) == []
 
 
