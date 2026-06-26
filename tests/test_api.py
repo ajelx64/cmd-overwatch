@@ -209,3 +209,44 @@ def test_event_task_create_non_dict_tool_input(client: TestClient) -> None:
     # F17: the TaskCreate/Update branch also assumed a dict (.get) and crashed.
     resp = client.post("/event", json={"tool_name": "TaskCreate", "tool_input": "oops"})
     assert resp.status_code == 200
+
+
+# -- security regression: TransitionError must not escape as 500 ---------------
+
+
+def test_reexecute_on_resolved_issue_returns_failed_not_500(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """NEW security finding (not in issue #16): when the executor's
+    set_issue_status("executing") raises TransitionError because the issue is
+    already resolved, the exception must be caught inside the executor and
+    returned as ExecutionResult("failed", ...) rather than propagating to a 500.
+
+    Root cause: executor.py's except clause previously only caught
+    (RuntimeError, OSError), not TransitionError (a ValueError subclass).
+    Fix: added TransitionError to the catch in Executor.execute().
+    """
+    store = server_mod.store
+    assert store is not None
+
+    # Create an issue, add a solution, resolve it (simulate a completed cycle)
+    issue_id = store.upsert_issue(
+        "fp-reexec", "log_scan", "low", "proj/job: resolved issue",
+        {"target": "proj", "task": "job"},
+    )
+    sid = store.add_solution(
+        issue_id, "## fix", "none", auto_eligible=True, kind="investigate-fix"
+    )
+    # Advance to resolved: open -> drafted -> executing -> resolved
+    store.set_issue_status(issue_id, "drafted")
+    store.set_issue_status(issue_id, "executing")
+    store.set_issue_status(issue_id, "resolved")
+
+    # Re-executing a resolved issue must never produce a 500.
+    # The executor tries set_issue_status(issue_id, "executing") on a resolved
+    # issue, which raises TransitionError — now caught and returned as "failed".
+    resp = client.post(f"/api/solutions/{sid}/execute")
+    assert resp.status_code == 200, f"Expected 200, got 500: {resp.text}"
+    body = resp.json()
+    # The response MUST be a structured result (failed/refused/dry-run), never a raw traceback.
+    assert body.get("status") in ("failed", "refused", "dry-run")
