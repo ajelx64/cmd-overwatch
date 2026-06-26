@@ -154,6 +154,10 @@ def test_check_windows_events_oserror_returns_empty(monkeypatch: pytest.MonkeyPa
         raise OSError("no powershell")
 
     monkeypatch.setattr(hh_mod.sys, "platform", "win32")
+    # Python 3.13's shutil.which consults _winapi when sys.platform == "win32";
+    # _winapi is None on a non-Windows CI runner, so stub which() to keep the
+    # faked-win32 path from crashing before the subprocess mock is exercised.
+    monkeypatch.setattr(hh_mod.shutil, "which", lambda *_a, **_k: "pwsh")
     monkeypatch.setattr(hh_mod.subprocess, "run", raise_oserror)
     findings, metrics = check_windows_events()
     assert findings == []
@@ -166,6 +170,10 @@ def test_check_windows_events_timeout_returns_empty(monkeypatch: pytest.MonkeyPa
         raise _subprocess.TimeoutExpired(cmd="pwsh", timeout=90)
 
     monkeypatch.setattr(hh_mod.sys, "platform", "win32")
+    # Python 3.13's shutil.which consults _winapi when sys.platform == "win32";
+    # _winapi is None on a non-Windows CI runner, so stub which() to keep the
+    # faked-win32 path from crashing before the subprocess mock is exercised.
+    monkeypatch.setattr(hh_mod.shutil, "which", lambda *_a, **_k: "pwsh")
     monkeypatch.setattr(hh_mod.subprocess, "run", raise_timeout)
     findings, metrics = check_windows_events()
     assert findings == []
@@ -178,6 +186,10 @@ def test_check_windows_events_nonzero_exit_returns_empty(monkeypatch: pytest.Mon
         return _subprocess.CompletedProcess(cmd, 1, stdout="", stderr="Access denied")
 
     monkeypatch.setattr(hh_mod.sys, "platform", "win32")
+    # Python 3.13's shutil.which consults _winapi when sys.platform == "win32";
+    # _winapi is None on a non-Windows CI runner, so stub which() to keep the
+    # faked-win32 path from crashing before the subprocess mock is exercised.
+    monkeypatch.setattr(hh_mod.shutil, "which", lambda *_a, **_k: "pwsh")
     monkeypatch.setattr(hh_mod.subprocess, "run", fake_run)
     findings, metrics = check_windows_events()
     assert findings == []
@@ -190,6 +202,10 @@ def test_check_windows_events_bad_json_returns_empty(monkeypatch: pytest.MonkeyP
         return _subprocess.CompletedProcess(cmd, 0, stdout="not-json", stderr="")
 
     monkeypatch.setattr(hh_mod.sys, "platform", "win32")
+    # Python 3.13's shutil.which consults _winapi when sys.platform == "win32";
+    # _winapi is None on a non-Windows CI runner, so stub which() to keep the
+    # faked-win32 path from crashing before the subprocess mock is exercised.
+    monkeypatch.setattr(hh_mod.shutil, "which", lambda *_a, **_k: "pwsh")
     monkeypatch.setattr(hh_mod.subprocess, "run", fake_run)
     findings, metrics = check_windows_events()
     assert findings == []
