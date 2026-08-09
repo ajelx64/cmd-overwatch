@@ -28,6 +28,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Get-StablePwshPath / Test-PwshLaunches (vendored from the Command canon — see _common.ps1
+# header) so the -Execute path in every task action below survives a PowerShell Store update.
+. "$PSScriptRoot\_common.ps1"
+
 # --- self-elevate: task registration needs admin -------------------------------
 $me = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -35,7 +39,7 @@ if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     $relaunch = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
                   '-TaskFolder', $TaskFolder, '-IntervalMinutes', $IntervalMinutes,
                   '-StartAt', $StartAt, '-AarAt', $AarAt)
-    Start-Process -FilePath (Get-Command pwsh).Source -Verb RunAs -Wait -ArgumentList $relaunch
+    Start-Process -FilePath (Get-StablePwshPath) -Verb RunAs -Wait -ArgumentList $relaunch
     return
 }
 
@@ -46,7 +50,7 @@ try {
     Start-Transcript -Path (Join-Path $logDir ("install-schedule-{0}.log" -f (Get-Date -Format 'yyyy-MM-dd'))) -Append | Out-Null
 } catch {}
 
-$pwshPath = (Get-Command pwsh).Source
+$pwshPath = Get-StablePwshPath   # NEVER the versioned Store path - see _common.ps1
 $user     = "$env:USERDOMAIN\$env:USERNAME"
 
 # S4U = "Run whether user is logged on or not" without storing a password.
