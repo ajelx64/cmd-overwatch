@@ -1,4 +1,14 @@
-"""Host health tests: disk thresholds, event summaries, log freshness."""
+"""Host health tests: disk thresholds, event summaries, log freshness.
+
+Covers ``overwatch.collector.host_health``: the disk-space check (against a real
+filesystem path, since disk usage is cheap and safe to read for real), the pure
+Windows-event-log analyzer (fed synthetic summaries, no real event log involved),
+log-freshness checks against files written with controlled mtimes, and the
+degrade-gracefully behaviour of both the disk and Windows-event checks when the
+underlying OS call fails, times out, or returns something unexpected. This collector
+only reads host state to produce findings/metrics — it takes no remediating action —
+so its tests are about "never crash the collector loop," not a safety envelope.
+"""
 
 import os
 import subprocess as _subprocess
@@ -24,6 +34,14 @@ NOW = time.time()
 
 
 def test_disk_check_returns_metric(tmp_path: Path) -> None:
+    """A real filesystem path must yield exactly one disk_free_pct metric with a
+    sane positive value, and any findings must agree with the metric's own
+    healthy/unhealthy verdict.
+
+    The free-space percentage on the machine running this suite is not controlled by
+    the test, so the assertion is written to hold either way (healthy with no
+    findings, or unhealthy with a finding) rather than asserting a specific outcome.
+    """
     findings, metrics = check_disk(tmp_path)
     assert len(metrics) == 1
     assert metrics[0].metric == "disk_free_pct"
@@ -37,12 +55,19 @@ def test_disk_check_returns_metric(tmp_path: Path) -> None:
 
 
 def test_no_events_is_healthy() -> None:
+    """Zero critical/error events must produce no findings and a healthy metric —
+    the quiet baseline the noisy-log test below is contrasted against.
+    """
     findings, metrics = analyze_windows_events({"Total": 0, "Top": []})
     assert findings == []
     assert metrics[0].healthy is True
 
 
 def test_events_summarized_with_top_providers() -> None:
+    """A non-zero event count must produce one finding whose title carries the total
+    and whose evidence names the noisiest providers by count — the detail an operator
+    needs to triage without opening Event Viewer.
+    """
     data = {
         "Total": 12,
         "Top": [{"Provider": "Disk", "Count": 8}, {"Provider": "DCOM", "Count": 4}],
@@ -58,6 +83,10 @@ def test_events_summarized_with_top_providers() -> None:
 
 
 def make_target(tmp_path: Path, max_age: int | None, log_age_hours: float | None) -> Target:
+    """Build a Target with a log directory, optionally containing one log file whose
+    mtime is set ``log_age_hours`` in the past (via ``os.utime``) so freshness checks
+    can be tested deterministically instead of depending on real wall-clock timing.
+    """
     log_dir = tmp_path / "logs"
     log_dir.mkdir(exist_ok=True)
     if log_age_hours is not None:
@@ -69,14 +98,21 @@ def make_target(tmp_path: Path, max_age: int | None, log_age_hours: float | None
 
 
 def test_no_cap_no_check(tmp_path: Path) -> None:
+    """A target with no ``max_log_age_hours`` configured must skip the check
+    entirely, even with a very old log present — opting out must actually opt out.
+    """
     assert check_log_freshness(make_target(tmp_path, None, 999), NOW) == []
 
 
 def test_fresh_logs_pass(tmp_path: Path) -> None:
+    """A log younger than the configured cap must not be flagged."""
     assert check_log_freshness(make_target(tmp_path, 24, 3), NOW) == []
 
 
 def test_stale_logs_flagged(tmp_path: Path) -> None:
+    """A log older than the cap must be flagged high severity with its age in the
+    title — this is the signal that a scheduled job has silently stopped running.
+    """
     findings = check_log_freshness(make_target(tmp_path, 24, 72), NOW)
     assert len(findings) == 1
     assert findings[0].severity == "high"
@@ -84,6 +120,10 @@ def test_stale_logs_flagged(tmp_path: Path) -> None:
 
 
 def test_no_logs_at_all_flagged(tmp_path: Path) -> None:
+    """A configured, empty log directory must be flagged distinctly ("no logs
+    found") rather than silently passing — an empty directory is not evidence of
+    health, it may mean logging broke entirely.
+    """
     findings = check_log_freshness(make_target(tmp_path, 24, None), NOW)
     assert len(findings) == 1
     assert "no logs found" in findings[0].title
@@ -93,16 +133,20 @@ def test_no_logs_at_all_flagged(tmp_path: Path) -> None:
 # check_disk: OSError and threshold branches (coverage gaps)
 # ---------------------------------------------------------------------------
 
-_FakeUsage = SimpleNamespace
+_FakeUsage = SimpleNamespace  # stand-in for shutil.disk_usage()'s named-tuple return
 
 
 def _make_usage(total: int, free: int) -> SimpleNamespace:
+    """Build a fake disk-usage result with the (total, used, free) fields check_disk
+    reads, so a specific free-space percentage can be forced without a real disk.
+    """
     return _FakeUsage(total=total, used=total - free, free=free)
 
 
 def test_check_disk_oserror_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """OSError from disk_usage (e.g. unmounted path) must silently return empty."""
     def raise_oserror(_: object) -> None:
+        """Stand in for shutil.disk_usage to simulate an unreadable/unmounted path."""
         raise OSError("no disk")
 
     monkeypatch.setattr(hh_mod.shutil, "disk_usage", raise_oserror)
@@ -151,6 +195,7 @@ def test_check_windows_events_non_windows_returns_empty(monkeypatch: pytest.Monk
 def test_check_windows_events_oserror_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """OSError while spawning PowerShell must degrade gracefully."""
     def raise_oserror(*a: object, **k: object) -> None:
+        """Stand in for subprocess.run to simulate PowerShell failing to spawn."""
         raise OSError("no powershell")
 
     monkeypatch.setattr(hh_mod.sys, "platform", "win32")
@@ -167,6 +212,7 @@ def test_check_windows_events_oserror_returns_empty(monkeypatch: pytest.MonkeyPa
 def test_check_windows_events_timeout_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """TimeoutExpired from PowerShell must degrade gracefully."""
     def raise_timeout(*a: object, **k: object) -> None:
+        """Stand in for subprocess.run to simulate PowerShell hanging past its timeout."""
         raise _subprocess.TimeoutExpired(cmd="pwsh", timeout=90)
 
     monkeypatch.setattr(hh_mod.sys, "platform", "win32")
@@ -183,6 +229,7 @@ def test_check_windows_events_timeout_returns_empty(monkeypatch: pytest.MonkeyPa
 def test_check_windows_events_nonzero_exit_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """A non-zero returncode from PowerShell must degrade gracefully."""
     def fake_run(cmd: list[str], **kw: object) -> object:
+        """Stand in for subprocess.run to simulate PowerShell exiting with an error."""
         return _subprocess.CompletedProcess(cmd, 1, stdout="", stderr="Access denied")
 
     monkeypatch.setattr(hh_mod.sys, "platform", "win32")
@@ -199,6 +246,7 @@ def test_check_windows_events_nonzero_exit_returns_empty(monkeypatch: pytest.Mon
 def test_check_windows_events_bad_json_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """Malformed JSON from PowerShell must degrade gracefully."""
     def fake_run(cmd: list[str], **kw: object) -> object:
+        """Stand in for subprocess.run to simulate PowerShell returning unparseable output."""
         return _subprocess.CompletedProcess(cmd, 0, stdout="not-json", stderr="")
 
     monkeypatch.setattr(hh_mod.sys, "platform", "win32")
@@ -225,6 +273,7 @@ def test_check_log_freshness_stat_oserror_continues(
     When ALL stat() calls fail the function should flag 'no logs found'
     (the same as if the directory were empty), not raise.
     """
+    # --- Arrange ---
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
     (log_dir / "job.log").write_text("=== exit 0 ===\n", encoding="utf-8")
@@ -233,13 +282,20 @@ def test_check_log_freshness_stat_oserror_continues(
     _original_stat = Path.stat
 
     def bad_stat(self: Path, *, follow_symlinks: bool = True) -> object:
+        """Replace Path.stat globally, but only fail it for .log files so the rest
+        of the test's own filesystem access (e.g. mkdir) is unaffected.
+        """
         if self.suffix == ".log":
             raise OSError("permission denied")
         return _original_stat(self, follow_symlinks=follow_symlinks)
 
     monkeypatch.setattr(Path, "stat", bad_stat)
     target = Target(name="t", log_dir=log_dir, max_log_age_hours=24)
+
+    # --- Act ---
     findings = check_log_freshness(target, NOW)
+
+    # --- Assert ---
     # All stat calls failed → treated as "no logs found"
     assert len(findings) == 1
     assert "no logs found" in findings[0].title

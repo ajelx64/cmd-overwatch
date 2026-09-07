@@ -1,6 +1,15 @@
 """Tests for the notify module: Discord webhook and SMTP email senders.
 
 All tests use ``unittest.mock`` — no real HTTP or SMTP connections are made.
+
+Covers ``overwatch.notify.discord``, ``overwatch.notify.email``, and the top-level
+``overwatch.notify.send`` dispatcher: the dry-run/disabled/missing-config paths that
+must never touch the network, the live-send paths (URL/payload shape for Discord,
+starttls/login/sendmail sequence for SMTP), and that a delivery failure in either
+channel is logged and swallowed rather than propagating out of ``send()`` — a
+notification failure must never take down the caller (e.g. the after-action-report
+generator) that triggered it. ``WEBHOOK`` below is a syntactically valid but
+non-functional placeholder URL used only as a fixture value, never a real endpoint.
 """
 
 from __future__ import annotations
@@ -81,6 +90,9 @@ def test_discord_failure_non_fatal(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def _full_smtp() -> SmtpConfig:
+    """Build a fully-populated SmtpConfig fixture (fake host/creds/addresses) used by
+    every SMTP test below that needs a config which passes the "is configured" check.
+    """
     return SmtpConfig(
         host="smtp.example.com",
         port=587,
