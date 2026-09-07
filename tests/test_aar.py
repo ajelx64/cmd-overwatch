@@ -1,4 +1,11 @@
-"""AAR generator tests: section rendering, re-run append, record row."""
+"""Tests for ``overwatch.aar.generator``: report rendering, persistence, and
+the re-run-append behaviour.
+
+Uses a real (temp-file) Store rather than mocks, seeded via ``seed()`` below
+with one issue in each report-relevant status (pending approval, resolved,
+failed) plus a host-health metric and a log-purge run — one seed exercises
+every section ``render()`` produces.
+"""
 
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -15,12 +22,20 @@ NOW = datetime(2026, 1, 6, 7, 30)
 
 @pytest.fixture
 def env(tmp_path: Path) -> tuple[Store, Config]:
+    """A dry-run Config paired with its own on-disk Store, isolated per test."""
     cfg = Config(data_dir=tmp_path / "data", reports_dir=tmp_path / "reports", dry_run=True)
     store = Store(cfg.db_path)
     return store, cfg
 
 
 def seed(store: Store) -> dict[str, int]:
+    """Populate one issue per report-relevant status, plus a host-health
+    metric and a log-purge run, so a single call exercises every section
+    render() produces.
+
+    Returns the created issue ids, though the current tests below discard
+    them (kept for any future test that needs to target a specific issue).
+    """
     pending = store.upsert_issue(
         "fp-p", "log_scan", "high", "proj/job: run failed with exit 1", {"target": "proj"}
     )
@@ -44,8 +59,18 @@ def seed(store: Store) -> dict[str, int]:
 
 
 def test_render_contains_all_sections(env: tuple[Store, Config]) -> None:
+    """render() emits every section heading and reflects the seeded state:
+    dry-run mode, the pending issue's gate category, and the purge run's
+    dry-run marker all show up in the rendered text.
+
+    A missing heading here means an operator's daily brief silently dropped
+    a whole section — this is the regression guard for that.
+    """
     store, cfg = env
     seed(store)
+    # render()'s "opened today" filter matches each issue's real first_seen
+    # timestamp (set by the store at insert time), not an arbitrary
+    # report_date — so this must be today's actual date, not the fixed DAY.
     today = datetime.now(UTC).date()
     body, summary = render(store, cfg, today, NOW)
     for heading in (
@@ -67,6 +92,9 @@ def test_render_contains_all_sections(env: tuple[Store, Config]) -> None:
 
 
 def test_generate_writes_file_and_record(env: tuple[Store, Config]) -> None:
+    """generate() writes the report file at the expected path and records
+    it in aar_records, so the dashboard can look up "today's" report by date.
+    """
     store, cfg = env
     seed(store)
     path = generate(store, cfg, DAY, NOW)
@@ -79,6 +107,13 @@ def test_generate_writes_file_and_record(env: tuple[Store, Config]) -> None:
 
 
 def test_rerun_appends_not_overwrites(env: tuple[Store, Config]) -> None:
+    """A second generate() call for the same day appends a timestamped
+    Re-run section instead of overwriting the first report.
+
+    This is the behaviour the module docstring promises ("the day's story
+    accumulates") — losing it would silently erase the morning's findings
+    whenever the collector re-runs later the same day.
+    """
     store, cfg = env
     seed(store)
     path = generate(store, cfg, DAY, NOW)
@@ -91,6 +126,9 @@ def test_rerun_appends_not_overwrites(env: tuple[Store, Config]) -> None:
 
 
 def test_empty_store_renders_green(env: tuple[Store, Config]) -> None:
+    """With no issues at all, render() reports an explicit all-clear rather
+    than an empty or malformed health board.
+    """
     store, cfg = env
     body, summary = render(store, cfg, DAY, NOW)
     assert "All targets green" in body

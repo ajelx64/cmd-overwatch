@@ -10,6 +10,10 @@ Detected:
 - uncommitted changes idle for > 24h (newest dirty-file mtime)  -> medium
 - commits on local branches that exist on no remote             -> medium
 - non-default branches with no commits for > 30 days            -> low
+
+Invoked by the collector entrypoint (``overwatch.collector.__main__``) for each
+configured target that has a ``repo`` path. Depends on ``overwatch.detect.rules``
+for the shared ``Finding``/fingerprint vocabulary and on ``git`` being on PATH.
 """
 
 from __future__ import annotations
@@ -42,6 +46,22 @@ class RepoState:
 
 
 def _git(repo: Path, *args: str) -> str:
+    """Run one ``git -C <repo> <args>`` command and return its stdout.
+
+    Args:
+        repo: Repository working directory. Passed via ``-C`` (never ``cd``)
+            so this process's own working directory is never touched.
+        *args: Git subcommand and its arguments, e.g. ``"status",
+            "--porcelain"``.
+
+    Returns:
+        The command's stdout, unparsed.
+
+    Raises:
+        RuntimeError: If git exits non-zero; the message is its stderr,
+            truncated to 200 chars so a pathological error can't bloat a
+            finding's evidence.
+    """
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         capture_output=True,
@@ -54,10 +74,23 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def collect_repo_state(repo: Path) -> RepoState:
-    """Read-only snapshot; failures land in ``state.error``."""
+    """Read-only snapshot; failures land in ``state.error``.
+
+    Args:
+        repo: Path to the repository's working directory.
+
+    Returns:
+        A :class:`RepoState`. On any git failure the partial state collected
+        so far is discarded in favor of ``state.error`` — callers only see a
+        clean snapshot or a clear "couldn't read this repo" signal, never a
+        half-filled one.
+    """
     state = RepoState()
     try:
+        # --- Step 1: uncommitted changes and how long they've sat there ---
         porcelain = _git(repo, "status", "--porcelain")
+        # `git status --porcelain` lines are "XY <path>" (two status chars +
+        # a space); slicing off the first 3 chars recovers the path.
         state.dirty_files = [ln[3:].strip() for ln in porcelain.splitlines() if ln.strip()]
         if state.dirty_files:
             mtimes = []
@@ -67,9 +100,11 @@ def collect_repo_state(repo: Path) -> RepoState:
                     mtimes.append(p.stat().st_mtime)
             state.newest_dirty_mtime = max(mtimes) if mtimes else None
 
+        # --- Step 2: commits that exist locally but on no remote-tracking branch ---
         unpushed = _git(repo, "log", "--branches", "--not", "--remotes", "--oneline")
         state.unpushed_commits = [ln for ln in unpushed.splitlines() if ln.strip()]
 
+        # --- Step 3: local branches (excluding the default) and their last commit time ---
         head = _git(repo, "symbolic-ref", "--short", "-q", "HEAD") or "main"
         state.default_branch = head.strip() or "main"
         refs = _git(
@@ -78,19 +113,39 @@ def collect_repo_state(repo: Path) -> RepoState:
         for ln in refs.splitlines():
             if "\x1f" not in ln:
                 continue
+            # \x1f (unit separator) is used as the field delimiter because it
+            # cannot appear in a branch name, unlike a space or comma.
             branch, _, epoch = ln.partition("\x1f")
             if branch != state.default_branch and epoch.strip().isdigit():
                 state.branches.append((branch, float(epoch)))
     except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        # Any collection step failing (git missing, timeout, unreadable repo)
+        # aborts the whole snapshot rather than reporting partial facts.
         state.error = str(exc)
     return state
 
 
 def analyze(name: str, state: RepoState, now: float | None = None) -> list[Finding]:
-    """Pure analysis of a repo snapshot."""
+    """Pure analysis of a repo snapshot.
+
+    Args:
+        name: Target name to attribute findings to (not the repo path — this
+            keeps fingerprints and titles stable even if the repo moves).
+        state: A snapshot from :func:`collect_repo_state` (or a hand-built
+            fixture in tests).
+        now: Reference epoch time for the age-based checks; defaults to the
+            current time. Overridable so tests don't depend on the wall
+            clock.
+
+    Returns:
+        Findings for whichever of the three hygiene checks the snapshot
+        trips; a repo can trigger more than one. If ``state.error`` is set,
+        every other check is skipped — there is nothing further to analyze.
+    """
     now = now if now is not None else time.time()
     findings: list[Finding] = []
 
+    # --- Step 1: the repo could not be read at all -> stop here ---
     if state.error is not None:
         findings.append(
             Finding(
@@ -103,6 +158,7 @@ def analyze(name: str, state: RepoState, now: float | None = None) -> list[Findi
         )
         return findings
 
+    # --- Step 2: uncommitted changes that have sat untouched too long ---
     if (
         state.dirty_files
         and state.newest_dirty_mtime is not None
@@ -123,6 +179,7 @@ def analyze(name: str, state: RepoState, now: float | None = None) -> list[Findi
             )
         )
 
+    # --- Step 3: commits that exist only locally, on no remote ---
     if state.unpushed_commits:
         findings.append(
             Finding(
@@ -134,6 +191,7 @@ def analyze(name: str, state: RepoState, now: float | None = None) -> list[Findi
             )
         )
 
+    # --- Step 4: non-default branches that have gone cold ---
     stale = [
         (b, e) for b, e in state.branches if now - e > STALE_BRANCH_DAYS * 86400
     ]
@@ -151,7 +209,20 @@ def analyze(name: str, state: RepoState, now: float | None = None) -> list[Findi
 
 
 def scan_repo(name: str, repo: Path) -> list[Finding]:
-    """Collect + analyze one repo."""
+    """Collect + analyze one repo.
+
+    Single flat guard-then-delegate: check that ``repo`` looks like a git
+    repository, then hand off to the two already-documented steps.
+
+    Args:
+        name: Target name to attribute findings to.
+        repo: Path to the repository's working directory.
+
+    Returns:
+        Findings from :func:`analyze`. A missing ``.git`` directory is
+        reported the same way as any other unreadable-repo error, so callers
+        don't need a separate case for "not actually a repo".
+    """
     if not (repo / ".git").exists():
         return analyze(name, RepoState(error="not a git repository"))
     return analyze(name, collect_repo_state(repo))

@@ -22,8 +22,18 @@ from overwatch.store import Store
 def draft_new_issues(store: Store, cfg: Config) -> list[tuple[int, int, bool]]:
     """Draft a solution for every open issue that has none yet.
 
-    Returns ``(issue_id, solution_id, gated)`` tuples. Re-opened issues that
-    already have an undecided solution are left alone.
+    A single flat pass over currently-open issues — each iteration reads,
+    drafts, writes, and moves on; there is no multi-phase structure to
+    narrate with step banners.
+
+    Args:
+        store: Shared persistence layer.
+        cfg: Loaded configuration; supplies operator-added gate patterns.
+
+    Returns:
+        ``(issue_id, solution_id, gated)`` tuples, one per newly drafted
+        solution. Re-opened issues that already have an undecided solution
+        are left alone (``store.solutions_for_issue`` is non-empty for them).
     """
     results: list[tuple[int, int, bool]] = []
     for issue in store.list_issues(status="open"):
@@ -47,7 +57,25 @@ def draft_new_issues(store: Store, cfg: Config) -> list[tuple[int, int, bool]]:
 def dispatch_solution(
     store: Store, cfg: Config, solution: dict[str, Any]
 ) -> ExecutionResult:
-    """Route an authorized solution to its runner by kind."""
+    """Route an authorized solution to its runner by kind.
+
+    A single flat dispatch table keyed on ``kind`` — no multi-phase logic,
+    so no step banners. Callers (the approval endpoint and the manual
+    re-execute endpoint) are expected to have already recorded any required
+    approval; ``Executor.execute`` re-checks authorization itself regardless.
+
+    Args:
+        store: Shared persistence layer, passed through to the executor.
+        cfg: Loaded configuration, passed through to the executor.
+        solution: Row dict from ``Store.get_solution``.
+
+    Returns:
+        The runner's :class:`ExecutionResult`. ``"report-only"`` solutions
+        complete immediately with nothing to execute; ``"log-purge"``
+        currently refuses (runner not implemented yet, and deliberately not
+        routed to the git-worktree executor, which cannot act on a
+        non-repo target); anything else goes to the headless :class:`Executor`.
+    """
     kind = solution.get("kind", "investigate-fix")
     if kind == "report-only":
         return ExecutionResult(

@@ -57,22 +57,51 @@ _DISK_LOW_KIND = (
     "period inside known log directories are eligible.",
 )
 
+# Display-only mapping from issue severity to a risk word shown in the
+# draft's "Risk:" line — deliberately independent of the gate category
+# (a gated but low-severity issue still reads as low risk to the operator).
 _SEVERITY_RISK = {"critical": "high", "high": "medium", "medium": "low", "low": "low"}
 
 
 @dataclass(frozen=True)
 class SolutionDraft:
+    """A drafted remediation, ready to store and (if ungated) execute.
+
+    Attributes:
+        kind: Machine-known remediation type (drives routing in
+            :mod:`overwatch.solution.pipeline` and gate eligibility in
+            :mod:`overwatch.detect.gate_classifier`).
+        body_md: The full operator-facing markdown brief.
+        decision: The gate classifier's verdict for this draft.
+    """
+
     kind: str
     body_md: str
     decision: GateDecision
 
     @property
     def auto_eligible(self) -> bool:
+        """Whether this draft may execute without an operator approval click."""
         return self.decision.auto
 
 
 def _playbook_for(issue: dict[str, Any]) -> tuple[str, str, str]:
+    """Pick the (kind, proposed action, rollback note) template for an issue.
+
+    Args:
+        issue: Row dict from ``Store.get_issue`` (dict shape, not the ORM
+            row itself).
+
+    Returns:
+        A ``(kind, action, rollback)`` tuple. Falls back to a generic
+        "investigate-fix" template when the issue's ``source`` has no
+        specific playbook entry, so every issue still gets a draft.
+    """
     evidence = issue.get("evidence") or {}
+    # Low-disk host-health findings get a dedicated destructive-but-scoped
+    # playbook (log purge) instead of the generic report-only host_health
+    # entry — distinguished by the presence of the disk-free-percent field
+    # rather than a separate `source` value.
     if issue.get("source") == "host_health" and "free_pct" in evidence:
         return _DISK_LOW_KIND
     return _PLAYBOOK.get(
@@ -86,6 +115,19 @@ def _playbook_for(issue: dict[str, Any]) -> tuple[str, str, str]:
 
 
 def _evidence_lines(evidence: dict[str, Any], limit: int = 6) -> list[str]:
+    """Render evidence key/value pairs as short markdown bullet lines.
+
+    Args:
+        evidence: The issue's evidence mapping (already redacted upstream by
+            :meth:`overwatch.store.Store.upsert_issue`).
+        limit: Maximum number of pairs to render, so a large evidence blob
+            cannot blow up the draft body.
+
+    Returns:
+        One ``"- key: value"`` string per pair, each value truncated to 160
+        characters (with an ellipsis) so a single oversized field cannot
+        dominate the draft.
+    """
     lines = []
     for k, v in list(evidence.items())[:limit]:
         text = str(v)
@@ -98,21 +140,38 @@ def _evidence_lines(evidence: dict[str, Any], limit: int = 6) -> list[str]:
 def draft_solution(
     issue: dict[str, Any], extra_gate_patterns: tuple[str, ...] = ()
 ) -> SolutionDraft:
-    """Draft a remediation for a stored issue (dict shape from Store.get_issue)."""
+    """Draft a remediation for a stored issue (dict shape from Store.get_issue).
+
+    Args:
+        issue: Row dict from ``Store.get_issue``/``Store.list_issues``.
+        extra_gate_patterns: Operator-configured additional gate regexes
+            (``[gates] extra_patterns`` in config.toml), passed through to
+            the classifier on top of the immutable built-in gate set.
+
+    Returns:
+        A :class:`SolutionDraft` combining the playbook template with the
+        gate classifier's verdict on the exact text an operator would read.
+    """
+    # --- Step 1: pick the proposed action from the issue-source playbook ---
     kind, action, rollback = _playbook_for(issue)
     title = str(issue.get("title", "unknown issue"))
     severity = str(issue.get("severity", "medium"))
     evidence: dict[str, Any] = issue.get("evidence") or {}
 
+    # --- Step 2: classify using exactly what the operator will read (title +
+    # proposed action + evidence), not just the machine `kind` — a safe kind
+    # can still describe an unsafe action in its title/evidence text. ---
     classified_text = "\n".join([title, action, *(_evidence_lines(evidence))])
     decision = classify(kind, classified_text, extra_gate_patterns)
 
+    # --- Step 3: render the gate verdict as a one-line summary for the body ---
     gate_line = (
         f"GATED ({decision.category}) — operator approval required"
         if decision.gated
         else "AUTO-ELIGIBLE — no gate pattern matched, kind is on the safe allowlist"
     )
 
+    # --- Step 4: assemble the full operator-facing markdown brief ---
     body = "\n".join(
         [
             f"# Solution draft — issue #{issue.get('id', '?')}",

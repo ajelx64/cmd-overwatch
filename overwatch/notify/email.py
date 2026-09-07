@@ -1,4 +1,9 @@
-"""SMTP email notification sender (stdlib only — no third-party mailer)."""
+"""SMTP email notification sender (stdlib only — no third-party mailer).
+
+Called by :func:`overwatch.notify.send` when ``cfg.email`` is enabled; depends
+only on :mod:`smtplib` and :mod:`email` from the standard library and on
+:class:`overwatch.config.SmtpConfig` for connection details.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +28,9 @@ def send_email(smtp_cfg: SmtpConfig, subject: str, body: str, dry_run: bool) -> 
         print(f"[notify/email] DRY-RUN: would send to {to}: {subject}")
         return
 
+    # Treat an incomplete config as "not set up" rather than an error: a
+    # fresh install with cfg.email left on but no SMTP block filled in
+    # should log and move on, not raise and take down the AAR run.
     required = (smtp_cfg.host, smtp_cfg.user, smtp_cfg.password, smtp_cfg.from_addr, to)
     if not all(required):
         print("[notify/email] not configured, skipping")
@@ -35,9 +43,15 @@ def send_email(smtp_cfg: SmtpConfig, subject: str, body: str, dry_run: bool) -> 
 
     try:
         with smtplib.SMTP(smtp_cfg.host, smtp_cfg.port) as server:
+            # STARTTLS upgrades the plaintext connection before any
+            # credential is sent; this assumes the submission port (587,
+            # SmtpConfig's default), not the implicit-TLS port (465).
             server.starttls()
             server.login(smtp_cfg.user, smtp_cfg.password)
             server.sendmail(smtp_cfg.from_addr, [to], msg.as_string())
         print(f"[notify/email] sent to {to}")
     except smtplib.SMTPException as exc:
+        # Narrowed to SMTPException (not a bare Exception) so a bug in this
+        # function itself still surfaces instead of being logged and
+        # swallowed like a genuine delivery failure.
         print(f"[notify/email] failed: {exc}")
