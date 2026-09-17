@@ -4,7 +4,7 @@ Follows the **Command canonical ruleset** at `guild/master/CLAUDE.md` (approval 
 branch/commit naming, Review Gate, DRE). This file holds only deltas.
 
 A real-time dashboard that watches Claude Code tasks and tool calls. The repository is
-**public** (`ajelx64/claude-overwatch`) — no cross-division IP, paths, or secrets in tracked
+**public** (`ajelx64/cmd-overwatch`) — no cross-division IP, paths, or secrets in tracked
 files.
 
 ## Commands (run in PowerShell, from this division)

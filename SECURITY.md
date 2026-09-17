@@ -126,8 +126,10 @@ When enabled:
 
 - The Discord webhook URL is read from the `OVERWATCH_DISCORD_WEBHOOK` environment
   variable at send time. It is never written to `config.toml` or the database.
-- The SMTP password is read from `OVERWATCH_SMTP_PASSWORD`. All other SMTP settings
-  (host, port, user, addresses) may be in `config.toml`, but are non-secret.
+- The SMTP password is best supplied via `OVERWATCH_SMTP_PASSWORD`, which overrides
+  `config.toml` at send time; it may also be set directly in `[notify.smtp]` in
+  `config.toml` as a fallback. All other SMTP settings (host, port, user, addresses)
+  may be in `config.toml`, but are non-secret.
 - Payloads are built from already-redacted database data and passed through `redact_text`
   again immediately before the outbound request.
 - With `dry_run = true`, the full payload is logged to stdout but no request is made.

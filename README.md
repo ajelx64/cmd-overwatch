@@ -233,8 +233,9 @@ extra_patterns = ["deploy", "terraform"]
 
 ### `[notify]`
 
-Notifications are off by default. Credentials come from environment variables, never from
-`config.toml`.
+Notifications are off by default. The Discord webhook URL is env-var only — it is never read
+from `config.toml`. The SMTP password may also be set in `[notify.smtp]` in `config.toml`,
+but the environment variable is the recommended path and overrides it at send time.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
