@@ -16,7 +16,7 @@ Claude Code session into a live browser dashboard, runs a scheduled collector ev
 to scan logs, git repos, Windows Task Scheduler, and host health for problems, and generates a
 daily after-action report summarising what happened overnight.
 
-Ungated fixes (log rotation, task restarts) execute automatically under strict rails. Anything
+Ungated fixes (log rotation) execute automatically under strict rails. Anything
 that could affect money, credentials, production branches, or external publishing waits in the
 dashboard's **Approvals** queue until you click Approve or Deny.
 
@@ -44,7 +44,7 @@ dashboard's **Approvals** queue until you click Approve or Deny.
 
 **Gated executor**
 
-- Auto-executes ungated fixes (log purge, restart) under strict rails: branch isolation,
+- Auto-executes ungated fixes (log purge) under strict rails: branch isolation,
   restricted tool allowlist, subprocess timeout + kill, single in-flight lock, `DRY_RUN=true`
   by default
 - Gated categories (money, secrets, main-branch merges, deletions, auth/network, publishing,
@@ -112,8 +112,6 @@ WebSocket to every connected browser. The collector (`overwatch.collector`) runs
 scheduled process, writing issues and solutions to the same database. The dashboard reads
 everything through the REST API and posts approval decisions back through it. The AAR generator
 (`overwatch.aar`) reads the database and writes Markdown reports on a daily schedule.
-
-Screenshots are in `docs/`.
 
 ---
 
@@ -215,8 +213,13 @@ log_dir = "C:/automation/logs"
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `host` | string | `"127.0.0.1"` | Bind address. Must be a loopback address (`127.0.0.1`, `localhost`, `::1`). The dashboard has no authentication and must never be exposed beyond this machine. |
-| `port` | int | `8765` | Listening port. |
+| `host` | string | `"127.0.0.1"` | Must be a loopback address (`127.0.0.1`, `localhost`, `::1`). The dashboard has no authentication and must never be exposed beyond this machine. |
+| `port` | int | `8765` | Validated port number. |
+
+`[server] host` and `[server] port` are validated at load time but are **not** wired to the
+actual bind address: `.\start.ps1` starts `uvicorn` with `--host 127.0.0.1 --port 8765`
+hardcoded and never reads `config.toml`. Editing these values will not change where the
+server listens.
 
 ### `[gates]`
 
