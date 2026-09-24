@@ -10,7 +10,7 @@ WAL-mode SQLite database. This document describes each component in detail.
 | Component | Entry point | Role |
 |-----------|-------------|------|
 | **Dashboard server** | `server.py` (`uvicorn`) | Accepts hook events via `POST /event`; serves the browser dashboard and REST API; broadcasts events over WebSocket |
-| **Collector** | `python -m overwatch.collector` | Scheduled every 30 min; scans four signal classes; upserts issues; drafts and dispatches solutions |
+| **Collector** | `python -m overwatch.collector` | Scheduled every hour; scans four signal classes; upserts issues; drafts and dispatches solutions |
 | **AAR generator** | `python -m overwatch.aar` | Scheduled daily at 07:30; reads the database; writes a Markdown after-action report; delivers notifications |
 | **Hook capture** | `hooks/capture.py` | Executed by Claude Code before and after every tool call; reads JSON from stdin; POSTs to `POST /event` |
 | **Config loader** | `overwatch/config.py` | Loads and validates `config.toml`; enforces loopback-only host constraint; provides typed `Config` dataclass |
@@ -40,7 +40,7 @@ rather than blocking or raising.
 
 ### Issue detection (Collector → DB)
 
-1. Windows Task Scheduler runs `python -m overwatch.collector` every 30 minutes.
+1. Windows Task Scheduler runs `python -m overwatch.collector` every hour.
 2. The collector instantiates each detector in sequence:
    - `log_scan.py` — reads each target's `log_dir` for exit codes, tracebacks, ERROR lines, and stale log age
    - `sched_tasks.py` — queries Windows Task Scheduler for each `task_folders` entry
@@ -213,7 +213,7 @@ Two tasks are registered by `scheduler/Install-Schedule.ps1`:
 
 | Scheduler path | Trigger | Command |
 |----------------|---------|---------|
-| `\Overwatch\Collector` | Repeat every 30 min, indefinitely | `pwsh scheduler\run_collector.ps1` → `python -m overwatch.collector` |
+| `\Overwatch\Collector` | Repeat every hour, indefinitely | `pwsh scheduler\run_collector.ps1` → `python -m overwatch.collector` |
 | `\Overwatch\Daily AAR` | Daily at 07:30 | `pwsh scheduler\run_aar.ps1` → `python -m overwatch.aar` |
 
 Both scripts are thin wrappers in `scheduler/` that activate the project's virtual

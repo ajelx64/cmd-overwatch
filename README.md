@@ -12,7 +12,7 @@
 
 `cmd-overwatch` watches the machine running your Claude Code automation fleet and tells you
 when something is wrong — and optionally fixes it. It streams every tool call from every
-Claude Code session into a live browser dashboard, runs a scheduled collector every 30 minutes
+Claude Code session into a live browser dashboard, runs a scheduled collector every hour
 to scan logs, git repos, Windows Task Scheduler, and host health for problems, and generates a
 daily after-action report summarising what happened overnight.
 
@@ -34,7 +34,7 @@ dashboard's **Approvals** queue until you click Approve or Deny.
 - **Approvals** — pending gated remediation decisions with Approve / Deny controls
 - **AAR** — daily after-action report viewer showing the most recent generated report
 
-**Scheduled collector (every 30 min)**
+**Scheduled collector (every hour)**
 
 - Log scanning — exit codes, Python tracebacks, ERROR/CRITICAL lines; staleness alerts for
   schedules that silently stopped
@@ -79,7 +79,7 @@ flowchart TD
     subgraph "Storage"
         DB[(SQLite WAL\ndata/overwatch.db)]
     end
-    subgraph "Collector  every 30 min"
+    subgraph "Collector  every hour"
         COL[overwatch.collector]
         SIG[Signals: logs · sched · git · host]
         DRF[Drafter + Gate classifier]
@@ -269,7 +269,7 @@ This creates two Windows Task Scheduler tasks:
 
 | Task | Schedule | What it does |
 |------|----------|--------------|
-| `\Overwatch\Collector` | Every 30 minutes | Runs `python -m overwatch.collector` — scans all four signal classes, upserts issues, drafts solutions, dispatches auto-eligible fixes |
+| `\Overwatch\Collector` | Every hour | Runs `python -m overwatch.collector` — scans all four signal classes, upserts issues, drafts solutions, dispatches auto-eligible fixes |
 | `\Overwatch\Daily AAR` | Daily at 07:30 | Runs `python -m overwatch.aar` — generates the after-action report and delivers notifications if configured |
 
 To remove the tasks:

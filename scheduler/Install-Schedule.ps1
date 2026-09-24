@@ -5,7 +5,7 @@ Register the overwatch collector as a recurring Windows Scheduled Task.
 
 .DESCRIPTION
 Creates a task under the given task folder (default '\Overwatch\') that runs
-`python -m overwatch.collector` on an interval (default every 30 minutes).
+`python -m overwatch.collector` on an interval (default every 60 minutes).
 Detection findings land in the SQLite store; the dashboard server reads them,
 so the health board stays current even when the server itself is down.
 
@@ -21,7 +21,9 @@ pwsh -NoProfile -File scheduler\Install-Schedule.ps1 -IntervalMinutes 15
 [CmdletBinding()]
 param(
     [string] $TaskFolder      = '\Overwatch\',
-    [int]    $IntervalMinutes = 30,
+    # Hourly, not every 30 min: each run counts as host activity, and a 30-min cadence kept
+    # resetting an idle-sleep watcher's 30-min quiet window so the host never slept.
+    [int]    $IntervalMinutes = 60,
     [string] $StartAt         = '06:00',
     [string] $AarAt           = '07:30'   # daily after-action report
 )
